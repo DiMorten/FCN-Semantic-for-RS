@@ -20,8 +20,8 @@ def extract_patches(output_folder, img_array, img_reference, stride):
 	np.save(output_folder + patch_name, patch_array_tensor)
 
 
-def normalize(img_patch_array):
-    return np.array(patch_array)/127.5 - 1.
+def normalize(im_patch_array):
+    return np.array(im_patch_array)/127.5 - 1.
 
 
 def inverse_transform(images):
