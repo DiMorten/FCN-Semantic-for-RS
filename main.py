@@ -174,6 +174,8 @@ class NetModel(NetObject):
 			deb.prints(self.metrics['test']['loss'])
 	
 
+
+
 flag = {"data_create": True}
 if __name__ == '__main__':
 	#
