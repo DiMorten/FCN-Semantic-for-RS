@@ -94,11 +94,14 @@ class Dataset(NetObject):
 		return out
 
 class NetModel(NetObject):
-	def __init__(self, batch_size=1, epochs=2, *args, **kwargs):
+	def __init__(self, batch_size=1,batch_size_test=10, epochs=2, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		if self.debug>=1: print("Initializing Model instance")
 		self.metrics={'train':{},'test':{}}
-		self.batch_size=batch_size
+		self.batch={'train':{},'test':{}}
+		self.batch['train']['size']=batch_size
+		self.batch['test']['size']=batch_size_test
+		
 		self.epochs=epochs
 		self.build()
 		
@@ -120,8 +123,8 @@ class NetModel(NetObject):
 		data['test']['in'] = normalize(data['test']['in'].astype('float32'))
 		
 		#Computing the number of batches
-		data['train']['batch_n'] = data['train']['in'].shape[0]//self.batch_size
-		data['test']['batch_n'] = data['test']['in'].shape[0]//self.batch_size
+		data['train']['batch_n'] = data['train']['in'].shape[0]//self.batch['train']['size']
+		data['test']['batch_n'] = data['test']['in'].shape[0]//self.batch['test']['size']
 
 		deb.prints(data['train']['batch_n'])
 
@@ -131,8 +134,9 @@ class NetModel(NetObject):
 	def train_loop(self,data):
 		print('Start the training')
 		
-		batch={}
-		batch['n'] = data['train']['in'].shape[0] // self.batch_size
+		batch={'train':{},'test':{}}
+		batch['train']['n'] = data['train']['in'].shape[0] // self.batch['train']['size']
+		batch['test']['n'] = data['test']['in'].shape[0] // self.batch['test']['size']
 		
 		for epoch in range(self.epochs):
 
@@ -142,19 +146,33 @@ class NetModel(NetObject):
 			# Random shuffle the data
 			data['train']['in'],data['train']['label']=shuffle(data['train']['in'],data['train']['label'])
 			
-			for batch_id in range(0, batch['n']):
-				idx0 = batch_id*self.batch_size
-				idx1 = (batch_id+1)*self.batch_size
+			for batch_id in range(0, batch['train']['n']):
+				idx0 = batch_id*self.batch['train']['size']
+				idx1 = (batch_id+1)*self.batch['train']['size']
 
-				batch['in']=data['train']['in'][idx0:idx1]
-				batch['label']=data['train']['label'][idx0:idx1]
+				batch['train']['in']=data['train']['in'][idx0:idx1]
+				batch['train']['label']=data['train']['label'][idx0:idx1]
 				
-				self.metrics['train']['loss']+=self.graph.train_on_batch(batch['in'],batch['label'])		# Accumulated epoch
+				self.metrics['train']['loss']+=self.graph.train_on_batch(batch['train']['in'],batch['train']['label'])		# Accumulated epoch
 			
-			self.metrics['train']['loss']/=self.batch_size		# Average epoch loss
+
+			self.metrics['train']['loss']/=self.batch['train']['n']		# Average epoch loss
 			deb.prints(self.metrics['train']['loss'])
 	
 
+			for batch_id in range(0, batch['test']['n']):
+				idx0 = batch_id*self.batch['test']['size']
+				idx1 = (batch_id+1)*self.batch['test']['size']
+
+				batch['test']['in']=data['test']['in'][idx0:idx1]
+				batch['test']['label']=data['test']['label'][idx0:idx1]
+				
+				self.metrics['test']['loss']+=self.graph.test_on_batch(batch['test']['in'],batch['test']['label'])		# Accumulated epoch
+			
+
+			self.metrics['test']['loss']/=self.batch['test']['n']		# Average epoch loss
+			deb.prints(self.metrics['test']['loss'])
+	
 
 flag = {"data_create": True}
 if __name__ == '__main__':
