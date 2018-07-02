@@ -4,7 +4,7 @@ from keras.layers import Input, Dense, Conv2D, MaxPool2D, Flatten, Dropout
 # from keras.callbacks import ModelCheckpoint , EarlyStopping
 from keras.optimizers import Adam
 from keras.models import Model
-from keras import backend as k
+from keras import backend as K
 import keras
 
 import numpy as np
@@ -12,7 +12,7 @@ from sklearn.utils import shuffle
 import cv2
 from skimage.util import view_as_windows
 import argparse
-
+import tensorflow as tf
 # Local
 
 import deb
@@ -24,13 +24,15 @@ parser.add_argument('-ps', '--patch_step', dest='patch_step',
 					type=int, default=32, help='patch len')
 parser.add_argument('-db', '--debug', dest='debug',
 					type=int, default=1, help='patch len')
+parser.add_argument('-ep', '--epochs', dest='epochs',
+					type=int, default=100, help='patch len')
 
 args = parser.parse_args()
 
 
 class NetObject(object):
 
-	def __init__(self, patch_len=32, patch_step=32, path="../data/", im_name_train="Image_Train.tif", im_name_test="Image_Test.tif", label_name_train="Reference_Train.tif", label_name_test="Reference_Test.tif", channel_n=3, debug=1):
+	def __init__(self, patch_len=32, patch_step=32, path="../data/", im_name_train="Image_Train.tif", im_name_test="Image_Test.tif", label_name_train="Reference_Train.tif", label_name_test="Reference_Test.tif", channel_n=3, debug=1, class_n=5):
 		self.patch_len = patch_len
 		self.path = {"v": path, 'train': {}, 'test': {}}
 		self.image = {'train': {}, 'test': {}}
@@ -42,6 +44,7 @@ class NetObject(object):
 		self.channel_n = 3
 		self.debug = debug
 		self.patch_step = patch_step
+		self.class_n = 5
 
 
 class Dataset(NetObject):
@@ -78,7 +81,31 @@ class Dataset(NetObject):
 		patches = {}
 		patches['in'] = self.view_as_windows_multichannel(image['in'], (self.patch_len, self.patch_len, self.channel_n), step=self.patch_step)
 		patches['label'] = self.view_as_windows_multichannel(image['label'], (self.patch_len, self.patch_len, 1), step=self.patch_step)
-		patches['label'] = np.expand_dims(patches['label'],axis=3)
+		#patches['label'] = np.expand_dims(patches['label'],axis=3)
+
+		### Switch to one-hot
+		##patches['label'] = np.reshape(patches['label'].shape[0],patches['label'].shape[1::])
+		if self.debug>=2: deb.prints(patches['label'].shape)
+		
+		if flag['label_one_hot']:
+
+			patches['label_h'] = np.reshape(patches['label'],(patches['label'].shape[0],patches['label'].shape[1]*patches['label'].shape[2]))
+			deb.prints(patches['label_h'].shape)
+
+			patches['label_h2']=np.zeros((patches['label_h'].shape[0],patches['label_h'].shape[1],self.class_n))
+
+			for sample_idx in range(0,patches['label_h'].shape[0]):
+				for loc_idx in range(0,patches['label_h'].shape[1]):
+					patches['label_h2'][sample_idx,loc_idx,patches['label_h'][sample_idx][loc_idx]]=1
+
+				#deb.prints(np.squeeze(patches['label_h'][sample_idx].shape))
+#				patches['label_h2'][sample_idx,:,np.squeeze(patches['label_h'][sample_idx])]=1
+			
+			patches['label']=np.reshape(patches['label_h2'],(patches['label_h2'].shape[0],patches['label'].shape[1],patches['label'].shape[2],self.class_n))
+
+			if self.debug>=2: deb.prints(patches['label_h2'].shape)
+			
+		deb.prints(patches['label'].shape)
 		if self.debug: deb.prints(patches['in'].shape)
 
 		return patches
@@ -103,12 +130,13 @@ class NetModel(NetObject):
 		self.batch['test']['size']=batch_size_test
 		
 		self.epochs=epochs
-		self.build()
 		
 	def build(self):
 		in_im = Input(shape=(self.patch_len, self.patch_len, self.channel_n))
-		out = Conv2D(1 , (5 , 5) , activation='relu' , padding='same')(in_im)
+		out = Conv2D(10 , (3 , 3) , activation='relu' , padding='same')(in_im)
+		out = Conv2D(self.class_n , (1 , 1) , activation='softmax' , padding='same')(out)
 		self.graph = Model(in_im,out)
+		print(self.graph.summary())
 		
 	def compile(self,optimizer,loss='binary_crossentropy',metrics=['accuracy']):
 		self.graph.compile(loss=loss,optimizer=optimizer,metrics=metrics)
@@ -135,8 +163,8 @@ class NetModel(NetObject):
 		print('Start the training')
 		
 		batch={'train':{},'test':{}}
-		batch['train']['n'] = data['train']['in'].shape[0] // self.batch['train']['size']
-		batch['test']['n'] = data['test']['in'].shape[0] // self.batch['test']['size']
+		self.batch['train']['n'] = data['train']['in'].shape[0] // self.batch['train']['size']
+		self.batch['test']['n'] = data['test']['in'].shape[0] // self.batch['test']['size']
 		
 		for epoch in range(self.epochs):
 
@@ -146,7 +174,7 @@ class NetModel(NetObject):
 			# Random shuffle the data
 			data['train']['in'],data['train']['label']=shuffle(data['train']['in'],data['train']['label'])
 			
-			for batch_id in range(0, batch['train']['n']):
+			for batch_id in range(0, self.batch['train']['n']):
 				idx0 = batch_id*self.batch['train']['size']
 				idx1 = (batch_id+1)*self.batch['train']['size']
 
@@ -160,7 +188,7 @@ class NetModel(NetObject):
 			deb.prints(self.metrics['train']['loss'])
 	
 
-			for batch_id in range(0, batch['test']['n']):
+			for batch_id in range(0, self.batch['test']['n']):
 				idx0 = batch_id*self.batch['test']['size']
 				idx1 = (batch_id+1)*self.batch['test']['size']
 
@@ -176,7 +204,7 @@ class NetModel(NetObject):
 
 
 
-flag = {"data_create": True}
+flag = {"data_create": True, "label_one_hot":True}
 if __name__ == '__main__':
 	#
 	data = Dataset(patch_len=args.patch_len,patch_step=args.patch_step)
@@ -184,17 +212,10 @@ if __name__ == '__main__':
 		data.create()
 
 	adam = Adam(lr=0.0001, beta_1=0.9)
-	model = NetModel(patch_len=args.patch_len,patch_step=args.patch_step)
+	model = NetModel(epochs=args.epochs,patch_len=args.patch_len,patch_step=args.patch_step)
 	model.build()
 	model.compile(loss='binary_crossentropy',optimizer=adam, metrics=['accuracy'])
 	if args.debug:
 		deb.prints(np.unique(data.patches['train']['label']))
 		deb.prints(data.patches['train']['label'].shape)
 	model.train(data.patches)
-	# extract_traning_patches()  # run this function once.
-	# net = FCN(rows, cols, channels)
-	# net.summary()
-	# net.compile(loss='binary_crossentropy',
-	#             optimizer=adam, metrics=['accuracy'])
-	# # Call the train function
-	# Train(net, train_pathes_dir='dir', batch_size=100, epochs=50)
