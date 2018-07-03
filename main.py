@@ -1,6 +1,6 @@
 from utils import *
 from keras.datasets import cifar10
-from keras.layers import Input, Dense, Conv2D, MaxPool2D, Flatten, Dropout
+from keras.layers import Input, Dense, Conv2D, MaxPool2D, Flatten, Dropout, Conv2DTranspose
 # from keras.callbacks import ModelCheckpoint , EarlyStopping
 from keras.optimizers import Adam
 from keras.models import Model
@@ -13,6 +13,10 @@ import cv2
 from skimage.util import view_as_windows
 import argparse
 import tensorflow as tf
+
+from keras.models import *
+from keras.layers import *
+from keras.optimizers import *
 # Local
 
 import deb
@@ -130,11 +134,40 @@ class NetModel(NetObject):
 		self.batch['test']['size']=batch_size_test
 		
 		self.epochs=epochs
-		
+
+	def transition_down(self,pipe,filters):
+		pipe = Conv2D(filters , (3 , 3), strides=(2,2), activation='relu', padding='same')(pipe)
+		return pipe
+	def dense_block(self,pipe,filters):
+		pipe = Conv2D(filters , (3 , 3), activation='relu', padding='same')(pipe)
+		return pipe
+	
+	def transition_up(self,pipe,filters):
+		pipe = Conv2DTranspose(filters,(3,3),strides=(2,2),activation='relu',padding='same')(pipe)
+		return pipe
+	def concatenate_transition_up(self,pipe1,pipe2,filters):
+		pipe = merge([pipe1,pipe2], mode = 'concat', concat_axis = 3)
+		pipe = self.transition_up(pipe,filters)
+		return pipe
 	def build(self):
 		in_im = Input(shape=(self.patch_len, self.patch_len, self.channel_n))
-		out = Conv2D(10 , (3 , 3) , activation='relu' , padding='same')(in_im)
-		out = Conv2D(self.class_n , (1 , 1) , activation='softmax' , padding='same')(out)
+		filters=8
+
+		pipe={'down':[], 'up':[]}
+		c={'down':0, 'up':0}
+		
+		pipe['down'].append(self.transition_down(in_im,filters)) #0 16x16
+		pipe['down'].append(self.transition_down(pipe['down'][0],filters*2)) #1 8x8
+		pipe['down'].append(self.transition_down(pipe['down'][1],filters*3)) #2 4x4
+		
+		pipe['down'].append(self.dense_block(pipe['down'][2],filters*4)) #3 4x4
+
+		pipe['up'].append(self.concatenate_transition_up(pipe['down'][3],pipe['down'][2],filters*3)) # 0 8x8
+		pipe['up'].append(self.concatenate_transition_up(pipe['up'][0],pipe['down'][1],filters*2)) # 1
+		pipe['up'].append(self.concatenate_transition_up(pipe['up'][1],pipe['down'][0],filters)) # 2
+
+		out = Conv2D(self.class_n , (1 , 1) , activation='softmax' , padding='same')(pipe['up'][-1])
+
 		self.graph = Model(in_im,out)
 		print(self.graph.summary())
 		
