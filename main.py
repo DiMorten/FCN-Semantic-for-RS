@@ -194,7 +194,8 @@ class NetModel(NetObject):
 
 	def train_loop(self,data):
 		print('Start the training')
-		
+		cback_tboard=keras.callbacks.TensorBoard(log_dir='../summaries/', histogram_freq=0, batch_size=self.batch['train']['size'], write_graph=True, write_grads=False, write_images=False)
+
 		batch={'train':{},'test':{}}
 		self.batch['train']['n'] = data['train']['in'].shape[0] // self.batch['train']['size']
 		self.batch['test']['n'] = data['test']['in'].shape[0] // self.batch['test']['size']
@@ -218,9 +219,8 @@ class NetModel(NetObject):
 			
 
 			self.metrics['train']['loss']/=self.batch['train']['n']		# Average epoch loss
-			deb.prints(self.metrics['train']['loss'])
-	
-
+			
+			print("Train loss={}".format(self.metrics['train']['loss']))
 			for batch_id in range(0, self.batch['test']['n']):
 				idx0 = batch_id*self.batch['test']['size']
 				idx1 = (batch_id+1)*self.batch['test']['size']
@@ -232,7 +232,8 @@ class NetModel(NetObject):
 			
 
 			self.metrics['test']['loss']/=self.batch['test']['n']		# Average epoch loss
-			deb.prints(self.metrics['test']['loss'])
+			print("Test loss={}".format(self.metrics['test']['loss']))
+
 	
 
 
