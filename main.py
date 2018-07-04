@@ -143,6 +143,12 @@ class Dataset(NetObject):
 		out = np.reshape(out, (out.shape[0] * out.shape[1],) + out.shape[2::])
 		return out
 
+def one_hot_multilabel_check(data):
+	count_per_sample=np.count_nonzero(data,axis=1)
+	unique,count=np.unique(count_per_sample,return_counts=True)
+	print("unique,count",unique,count)
+
+
 
 class NetModel(NetObject):
 	def __init__(self, batch_size=1, batch_size_test=200, epochs=2, eval_mode='metrics', *args, **kwargs):
@@ -244,7 +250,7 @@ class NetModel(NetObject):
 		one_hot_multilabel_check(data['prediction_h'])
 		one_hot_multilabel_check(data['label_h'])
 
-		metrics['confusion_matrix']=confusion_matrix(data['prediction_h'],data['label_h'])
+		metrics['confusion_matrix']=confusion_matrix(data['prediction_h'].argmax(axis=1),data['label_h'].argmax(axis=1))
 		
 		deb.prints(metrics['f1_score'])
 		
