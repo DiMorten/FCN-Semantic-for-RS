@@ -17,10 +17,12 @@ import tensorflow as tf
 from keras.models import *
 from keras.layers import *
 from keras.optimizers import *
+from keras import metrics
 
-from sklearn.metrics import confusion_matrix,f1_score,accuracy_score
+from sklearn.metrics import confusion_matrix,f1_score,accuracy_score,classification_report
 # Local
 
+from metrics import fmeasure
 import deb
 
 parser = argparse.ArgumentParser(description='')
@@ -204,7 +206,7 @@ class NetModel(NetObject):
 		self.graph = Model(in_im, out)
 		print(self.graph.summary())
 
-	def compile(self, optimizer, loss='binary_crossentropy', metrics=['accuracy']):
+	def compile(self, optimizer, loss='binary_crossentropy', metrics=['accuracy',metrics.categorical_accuracy]):
 		self.graph.compile(loss=loss, optimizer=optimizer, metrics=metrics)
 
 	def train(self, data):
@@ -227,6 +229,18 @@ class NetModel(NetObject):
 	def data_ims_flatten(self,ims):
 		return np.reshape(ims,(np.prod(ims.shape[0:-1]),ims.shape[-1])).astype(np.float64)
 
+	def data_average_acc(self,y_pred,y_true):
+		correct_per_class=np.zeros(self.class_n)
+		correct_all=y_pred.argmax(axis=1)[y_pred.argmax(axis=1)==y_true.argmax(axis=1)]
+		for clss in range(0,self.class_n):
+			correct_per_class[clss]=correct_all[correct_all==clss].shape[0]
+		if debug>=3:
+			deb.prints(correct_per_class)
+
+		_,per_class_count=np.unique(y_true.argmax(axis=1),return_counts=True)
+		per_class_acc=np.divide(correct_per_class.astype('float32'),per_class_count.astype('float32'))
+		average_acc=np.average(per_class_acc)
+		return average_acc,per_class_acc
 	def data_metrics_get(self,data): #requires batch['prediction'],batch['label']
 		
 
@@ -247,13 +261,25 @@ class NetModel(NetObject):
 		metrics['f1_score']=f1_score(data['prediction_h'],data['label_h'],average='macro')
 		metrics['overall_acc']=accuracy_score(data['prediction_h'],data['label_h'])
 		
-		one_hot_multilabel_check(data['prediction_h'])
-		one_hot_multilabel_check(data['label_h'])
-
+		
 		metrics['confusion_matrix']=confusion_matrix(data['prediction_h'].argmax(axis=1),data['label_h'].argmax(axis=1))
 		
-		deb.prints(metrics['f1_score'])
+		# correct_per_class=np.zeros(self.class_n)
+		# correct_all=data['prediction_h'].argmax(axis=1)[data['prediction_h'].argmax(axis=1)==data['label_h'].argmax(axis=1)]
+		# for clss in range(0,self.class_n):
+		# 	correct_per_class[clss]=correct_all[correct_all==clss].shape[0]
+		# deb.prints(correct_per_class)
+
+		# _,per_class_count=np.unique(data['label_h'].argmax(axis=1),return_counts=True)
+		# deb.prints(per_class_count)
+		metrics['average_acc'],metrics['per_class_acc']=self.data_average_acc(data['prediction_h'],data['label_h'])
+		#metrics['average_acc']=//np.sum(metrics['confusion_matrix'],axis=1)
+		print('oa={}, aa={}, f1={}'.format(metrics['overall_acc'],metrics['average_acc'],metrics['f1_score']))
+		print(metrics['per_class_acc'])
+		#deb.prints(metrics['overall_acc'])
 		
+		#deb.prints(metrics['confusion_matrix'])
+		#print(classification_report(data['prediction_h'],data['label_h']))
 		return metrics
 
 
@@ -279,12 +305,14 @@ class NetModel(NetObject):
 		self.batch['test']['n'] = data['test']['in'].shape[0] // self.batch['test']['size']
 
 		data['test']['prediction']=np.zeros_like(data['test']['label'])
+		count,unique=np.unique(data['test']['label'].argmax(axis=3),return_counts=True)
+		print("count,unique",count,unique)
 		deb.prints(data['test']['label'].shape)
 		#for epoch in [0,1]:
 		for epoch in range(self.epochs):
 
-			self.metrics['train']['loss'] = np.zeros((1, 2))
-			self.metrics['test']['loss'] = np.zeros((1, 2))
+			self.metrics['train']['loss'] = np.zeros((1, 3))
+			self.metrics['test']['loss'] = np.zeros((1, 3))
 
 			# Random shuffle the data
 			data['train']['in'], data['train']['label'] = shuffle(data['train']['in'], data['train']['label'])
@@ -342,7 +370,7 @@ if __name__ == '__main__':
 					 patch_step_train=args.patch_step, eval_mode=args.eval_mode)
 	model.build()
 	model.compile(loss='binary_crossentropy',
-				  optimizer=adam, metrics=['accuracy'])
+				  optimizer=adam, metrics=['accuracy',fmeasure])
 	if args.debug:
 		deb.prints(np.unique(data.patches['train']['label']))
 		deb.prints(data.patches['train']['label'].shape)
