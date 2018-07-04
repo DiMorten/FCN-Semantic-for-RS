@@ -18,7 +18,7 @@ from keras.models import *
 from keras.layers import *
 from keras.optimizers import *
 
-from sklearn.metrics import confusion_matrix,f1_score
+from sklearn.metrics import confusion_matrix,f1_score,accuracy_score
 # Local
 
 import deb
@@ -224,25 +224,31 @@ class NetModel(NetObject):
 	def data_metrics_get(self,data): #requires batch['prediction'],batch['label']
 		
 
-		data['test']['prediction'] = self.data_ims_flatten(data['test']['prediction']) #(self.batch['test']['size']*self.patch_len*self.patch_len,self.class_n
-		data['test']['prediction']=self.data_probabilities_to_one_hot(data['test']['prediction'])
+		data['prediction_h'] = self.data_ims_flatten(data['prediction'])
+		data['prediction_h']=self.data_probabilities_to_one_hot(data['prediction_h'])
 				
-		data['test']['label'] = self.data_ims_flatten(data['test']['label']) #(self.batch['test']['size']*self.patch_len*self.patch_len,self.class_n
+		data['label_h'] = self.data_ims_flatten(data['label']) #(self.batch['test']['size']*self.patch_len*self.patch_len,self.class_n
 		
-		if self.debug>=0: 
-			deb.prints(data['test']['prediction'].dtype)
-			deb.prints(data['test']['label'].dtype)
-			deb.prints(data['test']['prediction'].shape)
-			deb.prints(data['test']['label'].shape)
-			deb.prints(data['test']['label'][0])
-			deb.prints(data['test']['prediction'][0])
+		if self.debug>=3: 
+			deb.prints(data['prediction_h'].dtype)
+			deb.prints(data['label_h'].dtype)
+			deb.prints(data['prediction_h'].shape)
+			deb.prints(data['label_h'].shape)
+			deb.prints(data['label_h'][0])
+			deb.prints(data['prediction_h'][0])
 
 		metrics={}
-		metrics['f1_score']=f1_score(data['test']['prediction'],data['test']['label'],average='macro')
+		metrics['f1_score']=f1_score(data['prediction_h'],data['label_h'],average='macro')
+		metrics['overall_acc']=accuracy_score(data['prediction_h'],data['label_h'])
+		
+		one_hot_multilabel_check(data['prediction_h'])
+		one_hot_multilabel_check(data['label_h'])
+
+		metrics['confusion_matrix']=confusion_matrix(data['prediction_h'],data['label_h'])
+		
 		deb.prints(metrics['f1_score'])
-		#data['train']['prediction'] = np.reshape(data['test']['prediction'],(np.prod(data['test']['prediction'].shape[0:-1]),batch['test']['prediction'].shape[-1])) #(self.batch['test']['size']*self.patch_len*self.patch_len,self.class_n
 		
-		
+		return metrics
 
 
 		#stats={'per_class':{},'overall':{}}
@@ -252,9 +258,9 @@ class NetModel(NetObject):
 		#	stats['per_class']['correct'][clss]			
 
 
-	def data_probabilities_to_one_hot(self,batch_vals):
-		out=np.zeros_like(batch_vals)
-		out[np.arange(len(batch_vals)), batch_vals.argmax(1)] = 1
+	def data_probabilities_to_one_hot(self,vals):
+		out=np.zeros_like(vals)
+		out[np.arange(len(vals)), vals.argmax(1)] = 1
 		return out
 
 	def train_loop(self, data):
@@ -268,8 +274,8 @@ class NetModel(NetObject):
 
 		data['test']['prediction']=np.zeros_like(data['test']['label'])
 		deb.prints(data['test']['label'].shape)
-		for epoch in [0,1]:
-		#for epoch in range(self.epochs):
+		#for epoch in [0,1]:
+		for epoch in range(self.epochs):
 
 			self.metrics['train']['loss'] = np.zeros((1, 2))
 			self.metrics['test']['loss'] = np.zeros((1, 2))
@@ -278,6 +284,8 @@ class NetModel(NetObject):
 			data['train']['in'], data['train']['label'] = shuffle(data['train']['in'], data['train']['label'])
 
 			for batch_id in range(0, self.batch['train']['n']):
+			#for batch_id in range(0, 2):
+				
 				idx0 = batch_id*self.batch['train']['size']
 				idx1 = (batch_id+1)*self.batch['train']['size']
 
@@ -294,21 +302,20 @@ class NetModel(NetObject):
 				idx0 = batch_id*self.batch['test']['size']
 				idx1 = (batch_id+1)*self.batch['test']['size']
 
-				deb.prints(data['test']['label'].shape)
-				print(idx0,idx1)
+				#deb.prints(data['test']['label'].shape)
+				#print(idx0,idx1)
 				batch['test']['in'] = data['test']['in'][idx0:idx1]
 				batch['test']['label'] = data['test']['label'][idx0:idx1]
 
-				deb.prints(batch['test']['label'].shape)
+				#deb.prints(batch['test']['label'].shape)
 				self.metrics['test']['loss'] += self.graph.test_on_batch(
 					batch['test']['in'], batch['test']['label'])		# Accumulated epoch
 
 				#batch['test']['prediction']=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 				data['test']['prediction'][idx0:idx1]=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 				
-			#metrics=self.data_metrics_get(data)
+			metrics=self.data_metrics_get(data['test'])
 
-			
 
 
 			# Average epoch loss
