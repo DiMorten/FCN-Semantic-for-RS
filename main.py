@@ -22,18 +22,24 @@ from keras import metrics
 from sklearn.metrics import confusion_matrix,f1_score,accuracy_score,classification_report
 # Local
 
-from metrics import fmeasure
+from metrics import fmeasure,categorical_accuracy
 import deb
 
 parser = argparse.ArgumentParser(description='')
 parser.add_argument('-pl', '--patch_len', dest='patch_len',
 					type=int, default=32, help='patch len')
-parser.add_argument('-ps', '--patch_step', dest='patch_step',
+parser.add_argument('-pstr', '--patch_step_train', dest='patch_step_train',
 					type=int, default=32, help='patch len')
+parser.add_argument('-psts', '--patch_step_test', dest='patch_step_test',
+					type=int, default=32, help='patch len')
+
 parser.add_argument('-db', '--debug', dest='debug',
 					type=int, default=1, help='patch len')
 parser.add_argument('-ep', '--epochs', dest='epochs',
 					type=int, default=100, help='patch len')
+parser.add_argument('-bstr', '--batch_size_train', dest='batch_size_train',
+					type=int, default=32, help='patch len')
+
 parser.add_argument('-em', '--eval_mode', dest='eval_mode',
 					default='metrics', help='Test evaluate mode: metrics or predict')
 
@@ -56,6 +62,7 @@ class NetObject(object):
 		self.channel_n = 3
 		self.debug = debug
 		self.class_n = 5
+
 
 
 class Dataset(NetObject):
@@ -153,13 +160,13 @@ def one_hot_multilabel_check(data):
 
 
 class NetModel(NetObject):
-	def __init__(self, batch_size=1, batch_size_test=200, epochs=2, eval_mode='metrics', *args, **kwargs):
+	def __init__(self, batch_size_train=32, batch_size_test=200, epochs=2, eval_mode='metrics', *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		if self.debug >= 1:
 			print("Initializing Model instance")
 		self.metrics = {'train': {}, 'test': {}}
 		self.batch = {'train': {}, 'test': {}}
-		self.batch['train']['size'] = batch_size
+		self.batch['train']['size'] = batch_size_train
 		self.batch['test']['size'] = batch_size_test
 		self.eval_mode = eval_mode
 		self.epochs = epochs
@@ -179,24 +186,26 @@ class NetModel(NetObject):
 		return pipe
 
 	def concatenate_transition_up(self, pipe1, pipe2, filters):
+		pipe = keras.layers.concatenate([pipe1, pipe2], axis=3)
+		
 		pipe = merge([pipe1, pipe2], mode='concat', concat_axis=3)
 		pipe = self.transition_up(pipe, filters)
 		return pipe
 
 	def build(self):
 		in_im = Input(shape=(self.patch_len, self.patch_len, self.channel_n))
-		filters = 8
+		filters = 64
 
 		pipe = {'down': [], 'up': []}
 		c = {'down': 0, 'up': 0}
 
 		pipe['down'].append(self.transition_down(in_im, filters))  # 0 16x16
 		pipe['down'].append(self.transition_down(pipe['down'][0], filters*2))  # 1 8x8
-		pipe['down'].append(self.transition_down(pipe['down'][1], filters*3))  # 2 4x4
+		pipe['down'].append(self.transition_down(pipe['down'][1], filters*4))  # 2 4x4
 
-		pipe['down'].append(self.dense_block(pipe['down'][2], filters*4))  # 3 4x4
+		pipe['down'].append(self.dense_block(pipe['down'][2], filters*8))  # 3 4x4
 
-		pipe['up'].append(self.concatenate_transition_up(pipe['down'][3], pipe['down'][2], filters*3))  # 0 8x8
+		pipe['up'].append(self.concatenate_transition_up(pipe['down'][3], pipe['down'][2], filters*4))  # 0 8x8
 		pipe['up'].append(self.concatenate_transition_up(pipe['up'][0], pipe['down'][1], filters*2))  # 1
 		pipe['up'].append(self.concatenate_transition_up(pipe['up'][1], pipe['down'][0], filters))  # 2
 
@@ -210,6 +219,8 @@ class NetModel(NetObject):
 		self.graph.compile(loss=loss, optimizer=optimizer, metrics=metrics)
 
 	def train(self, data):
+		data_obj=data
+		data=data.patches
 		# Random shuffle
 		data['train']['in'], data['train']['label'] = shuffle(data['train']['in'], data['train']['label'], random_state=0)
 		data['test']['in'], data['test']['label'] = shuffle(data['test']['in'], data['test']['label'], random_state=0)
@@ -289,11 +300,13 @@ class NetModel(NetObject):
 		count,unique=np.unique(data['test']['label'].argmax(axis=3),return_counts=True)
 		print("count,unique",count,unique)
 		deb.prints(data['test']['label'].shape)
+		deb.prints(self.batch['test']['n'])
+		
 		#for epoch in [0,1]:
 		for epoch in range(self.epochs):
 
-			self.metrics['train']['loss'] = np.zeros((1, 3))
-			self.metrics['test']['loss'] = np.zeros((1, 3))
+			self.metrics['train']['loss'] = np.zeros((1, 4))
+			self.metrics['test']['loss'] = np.zeros((1, 4))
 
 			# Random shuffle the data
 			data['train']['in'], data['train']['label'] = shuffle(data['train']['in'], data['train']['label'])
@@ -330,7 +343,8 @@ class NetModel(NetObject):
 				#batch['test']['prediction']=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 				data['test']['prediction'][idx0:idx1]=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 
-				if (batch_id % 90 == 0) and (epoch % 3 == 0):
+				if (batch_id % 4 == 0) and (epoch % 3 == 0):
+					print("Saving image, batch id={}, epoch={}".format(batch_id,epoch))
 					#print(data['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50.shape)
 					cv2.imwrite("../results/pred"+str(batch_id)+".png",data['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50)
 					cv2.imwrite("../results/label"+str(batch_id)+".png",data['test']['label'][idx0].argmax(axis=2).astype(np.uint8)*50)
@@ -349,17 +363,17 @@ class NetModel(NetObject):
 flag = {"data_create": True, "label_one_hot": True}
 if __name__ == '__main__':
 	#
-	data = Dataset(patch_len=args.patch_len, patch_step_train=args.patch_step)
+	data = Dataset(patch_len=args.patch_len, patch_step_train=args.patch_step_train)
 	if flag['data_create']:
 		data.create()
 
 	adam = Adam(lr=0.0001, beta_1=0.9)
 	model = NetModel(epochs=args.epochs, patch_len=args.patch_len,
-					 patch_step_train=args.patch_step, eval_mode=args.eval_mode)
+					 patch_step_train=args.patch_step_train, eval_mode=args.eval_mode,batch_size_train=args.batch_size_train)
 	model.build()
 	model.compile(loss='binary_crossentropy',
-				  optimizer=adam, metrics=['accuracy',fmeasure])
+				  optimizer=adam, metrics=['accuracy',fmeasure,categorical_accuracy])
 	if args.debug:
 		deb.prints(np.unique(data.patches['train']['label']))
 		deb.prints(data.patches['train']['label'].shape)
-	model.train(data.patches)
+	model.train(data)
