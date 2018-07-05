@@ -264,29 +264,11 @@ class NetModel(NetObject):
 		
 		metrics['confusion_matrix']=confusion_matrix(data['prediction_h'].argmax(axis=1),data['label_h'].argmax(axis=1))
 		
-		# correct_per_class=np.zeros(self.class_n)
-		# correct_all=data['prediction_h'].argmax(axis=1)[data['prediction_h'].argmax(axis=1)==data['label_h'].argmax(axis=1)]
-		# for clss in range(0,self.class_n):
-		# 	correct_per_class[clss]=correct_all[correct_all==clss].shape[0]
-		# deb.prints(correct_per_class)
-
-		# _,per_class_count=np.unique(data['label_h'].argmax(axis=1),return_counts=True)
-		# deb.prints(per_class_count)
 		metrics['average_acc'],metrics['per_class_acc']=self.data_average_acc(data['prediction_h'],data['label_h'])
-		#metrics['average_acc']=//np.sum(metrics['confusion_matrix'],axis=1)
-		print(metrics['per_class_acc'])
-		#deb.prints(metrics['overall_acc'])
-		
-		#deb.prints(metrics['confusion_matrix'])
-		#print(classification_report(data['prediction_h'],data['label_h']))
+
+		if self.debug>=2: print(metrics['per_class_acc'])
+
 		return metrics
-
-
-		#stats={'per_class':{},'overall':{}}
-		#stats['per_class']['correct']=np.zeros(self.class_n).astype(np.float32)
-
-		#for clss in range(0,self.class_n):
-		#	stats['per_class']['correct'][clss]			
 
 
 	def data_probabilities_to_one_hot(self,vals):
@@ -348,8 +330,8 @@ class NetModel(NetObject):
 				#batch['test']['prediction']=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 				data['test']['prediction'][idx0:idx1]=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 
-				if batch_id % 90 == 0 and epoch % 3 == 0:
-					print(data['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50.shape)
+				if (batch_id % 90 == 0) and (epoch % 3 == 0):
+					#print(data['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50.shape)
 					cv2.imwrite("../results/pred"+str(batch_id)+".png",data['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50)
 					cv2.imwrite("../results/label"+str(batch_id)+".png",data['test']['label'][idx0].argmax(axis=2).astype(np.uint8)*50)
 						
