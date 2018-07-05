@@ -234,7 +234,7 @@ class NetModel(NetObject):
 		correct_all=y_pred.argmax(axis=1)[y_pred.argmax(axis=1)==y_true.argmax(axis=1)]
 		for clss in range(0,self.class_n):
 			correct_per_class[clss]=correct_all[correct_all==clss].shape[0]
-		if debug>=3:
+		if self.debug>=3:
 			deb.prints(correct_per_class)
 
 		_,per_class_count=np.unique(y_true.argmax(axis=1),return_counts=True)
@@ -274,7 +274,6 @@ class NetModel(NetObject):
 		# deb.prints(per_class_count)
 		metrics['average_acc'],metrics['per_class_acc']=self.data_average_acc(data['prediction_h'],data['label_h'])
 		#metrics['average_acc']=//np.sum(metrics['confusion_matrix'],axis=1)
-		print('oa={}, aa={}, f1={}'.format(metrics['overall_acc'],metrics['average_acc'],metrics['f1_score']))
 		print(metrics['per_class_acc'])
 		#deb.prints(metrics['overall_acc'])
 		
@@ -332,6 +331,7 @@ class NetModel(NetObject):
 			# Average epoch loss
 			self.metrics['train']['loss'] /= self.batch['train']['n']
 
+
 			for batch_id in range(0, self.batch['test']['n']):
 				idx0 = batch_id*self.batch['test']['size']
 				idx1 = (batch_id+1)*self.batch['test']['size']
@@ -347,11 +347,17 @@ class NetModel(NetObject):
 
 				#batch['test']['prediction']=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 				data['test']['prediction'][idx0:idx1]=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
-				
+
+				if batch_id % 90 == 0 and epoch % 3 == 0:
+					print(data['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50.shape)
+					cv2.imwrite("../results/pred"+str(batch_id)+".png",data['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50)
+					cv2.imwrite("../results/label"+str(batch_id)+".png",data['test']['label'][idx0].argmax(axis=2).astype(np.uint8)*50)
+						
+			
+			print("Epoch={}".format(epoch))	
 			metrics=self.data_metrics_get(data['test'])
-
-
-
+			print('oa={}, aa={}, f1={}'.format(metrics['overall_acc'],metrics['average_acc'],metrics['f1_score']))
+		
 			# Average epoch loss
 			self.metrics['test']['loss'] /= self.batch['test']['n']
 			print("Train loss={}, Test loss={}".format(self.metrics['train']['loss'],self.metrics['test']['loss']))
