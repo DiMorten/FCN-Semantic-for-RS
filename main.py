@@ -220,17 +220,22 @@ class Dataset(NetObject):
 		h,w,_=self.image[subset]['label'].shape
 		print(self.patches[subset]['label_partitioned_shape'])
 		deb.prints(self.patches[subset][mode].shape)
-		h_blocks,w_blocks,_,_=self.patches[subset]['label_partitioned_shape']
+		
+		h_blocks,w_blocks,patch_len,_=self.patches[subset]['label_partitioned_shape']
+
+		patches_block=np.reshape(self.patches[subset][mode].argmax(axis=3),(h_blocks,w_blocks,patch_len,patch_len))
+
+
 		self.im_reconstructed=np.squeeze(np.zeros_like(self.image[subset]['label']))
 
 		h_block_len=int(self.image[subset]['label'].shape[0]/h_blocks)
 		w_block_len=int(self.image[subset]['label'].shape[1]/w_blocks)
 		
 		count=0
-		if self.debug>=2:
-			deb.prints(self.patches[subset]['prediction'][count].shape)
-			deb.prints(self.patches[subset]['prediction'].shape)
-			deb.prints(self.patches[subset]['label'].shape)
+		# if self.debug>=2:
+		# 	deb.prints(self.patches[subset]['prediction'][count].shape)
+		# 	deb.prints(self.patches[subset]['prediction'].shape)
+		# 	deb.prints(self.patches[subset]['label'].shape)
 			
 		for w_block in range(0,w_blocks):
 			for h_block in range(0,h_blocks):
@@ -239,9 +244,9 @@ class Dataset(NetObject):
 				#print(y)
 				#print(x)				
 				#deb.prints([y:y+self.patch_len])
-				self.im_reconstructed[y:y+self.patch_len,x:x+self.patch_len]=self.patches[subset][mode][count].argmax(axis=2)
+				self.im_reconstructed[y:y+self.patch_len,x:x+self.patch_len]=patches_block[h_block,w_block,:,:]
 				count+=1
-
+		deb.prints(count)
 		cv2.imwrite('../results/reconstructed/im_reconstructed_'+subset+'_'+mode+'.png',self.im_reconstructed.astype(np.uint8)*40)
 
 		#print(h,w,h_blocks,w_blocks)
