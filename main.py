@@ -98,6 +98,8 @@ class Dataset(NetObject):
 		image = {}
 		image['in'] = cv2.imread(path['in'], -1)
 		image['label'] = np.expand_dims(cv2.imread(path['label'], 0), axis=2)
+		image['label_rgb']=cv2.imread(path['label'], -1)
+		deb.prints(image['label_rgb'][0])
 		return image
 
 	def patches_extract(self, image, patch_step):
@@ -248,10 +250,11 @@ class Dataset(NetObject):
 				count+=1
 		deb.prints(count)
 
-		self.im_reconstructed_rgb=np.zeros((self.im_reconstructed.shape+(3,)))
-		deb.prints(self.im_reconstructed_rgb.shape)
+		#self.im_reconstructed_rgb=np.zeros((self.im_reconstructed.shape+(3,)))
+		
 
-		self.im_reconstructed_rgb=self.im_grayscale_idx_to_rgb(self.im_reconstructed.shape)
+		self.im_reconstructed_rgb=self.im_grayscale_idx_to_rgb(self.im_reconstructed)
+		deb.prints(self.im_reconstructed_rgb.shape)
 		cv2.imwrite('../results/reconstructed/im_reconstructed_'+subset+'_'+mode+'.png',self.im_reconstructed.astype(np.uint8)*40)
 
 		#print(h,w,h_blocks,w_blocks)
@@ -259,7 +262,9 @@ class Dataset(NetObject):
 
 
 	def im_grayscale_idx_to_rgb(self,im):
+		#deb.prints((im.shape+(3,)))
 		out=np.zeros((im.shape+(3,)))
+
 		return out
 
 
