@@ -271,6 +271,8 @@ class Dataset(NetObject):
 	def im_reconstruct(self,subset='test',mode='prediction'):
 		h,w,_=self.image[subset]['label'].shape
 		print(self.patches[subset]['label_partitioned_shape'])
+
+		h=h-30 # Last 30 vertical pixels were not taken into account
 		deb.prints(self.patches[subset][mode].shape)
 		
 		h_blocks,w_blocks,patch_len,_=self.patches[subset]['label_partitioned_shape']
@@ -349,7 +351,7 @@ class NetModel(NetObject):
 			2, 2), padding='same')(pipe)
 		pipe = keras.layers.BatchNormalization(axis=3)(pipe)
 		pipe = Activation('relu')(pipe)
-		pipe = Dropout(0.2)(pipe)
+		#pipe = Dropout(0.2)(pipe)
 		#pipe = Conv2D(filters, (1, 1), padding='same')(pipe)
 		#pipe = keras.layers.BatchNormalization(axis=3)(pipe)
 		#pipe = Activation('relu')(pipe)
@@ -420,6 +422,10 @@ class NetModel(NetObject):
 
 		if metrics[most_important]>=self.early_stop['best']:
 			self.early_stop['best']=metrics[most_important]
+			self.early_stop['overall_acc']=metrics['overall_acc']
+			self.early_stop['f1_score']=metrics['f1_score']
+			self.early_stop['average_acc']=metrics['average_acc']
+			
 			self.early_stop['count']=0
 			print("Best metric updated")
 			data.metrics_write_to_txt(metrics,epoch)
@@ -441,6 +447,10 @@ class NetModel(NetObject):
 		batch = {'train': {}, 'test': {}}
 		self.batch['train']['n'] = data.patches['train']['in'].shape[0] // self.batch['train']['size']
 		self.batch['test']['n'] = data.patches['test']['in'].shape[0] // self.batch['test']['size']
+
+		data.patches['test']['n']=data.patches['test']['label'].shape[0]
+		data.patches['train']['n']=data.patches['train']['label'].shape[0]
+
 
 		data.patches['test']['prediction']=np.zeros_like(data.patches['test']['label'])
 		count,unique=np.unique(data.patches['test']['label'].argmax(axis=3),return_counts=True)
@@ -477,10 +487,17 @@ class NetModel(NetObject):
 
 			data.patches['test']['prediction']=np.zeros_like(data.patches['test']['label'])
 			self.batch_test_stats=True
-			for batch_id in range(0, self.batch['test']['n']):
+			for batch_id in range(0, self.batch['test']['n']+1):
 				idx0 = batch_id*self.batch['test']['size']
 				idx1 = (batch_id+1)*self.batch['test']['size']
 
+
+				# This is for last batch
+				if idx0>=data.patches['test']['n']:
+					break
+				if idx1>data.patches['test']['n']:
+					idx1=data.patches['test']['n']
+					
 				#deb.prints(data.patches['test']['label'].shape)
 				#print(idx0,idx1)
 				batch['test']['in'] = data.patches['test']['in'][idx0:idx1]
@@ -511,6 +528,9 @@ class NetModel(NetObject):
 
 			#self.test_metrics_evaluate(data.patches['test'],metrics,epoch)
 			if self.early_stop['signal']==True:
+				deb.prints(self.early_stop['overall_acc'])
+				deb.prints(self.early_stop['average_acc'])
+				deb.prints(self.early_stop['f1_score'])
 				break
 			print('oa={}, aa={}, f1={}'.format(metrics['overall_acc'],metrics['average_acc'],metrics['f1_score']))
 		
