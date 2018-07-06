@@ -309,21 +309,35 @@ class NetModel(NetObject):
 		in_im = Input(shape=(self.patch_len, self.patch_len, self.channel_n))
 		filters = 64
 
-		pipe = {'down': [], 'up': []}
-		c = {'down': 0, 'up': 0}
+		#pipe = {'fwd': [], 'bckwd': []}
+		c = {'init_up': 0, 'up': 0}
+		pipe=[]
 
-		pipe['down'].append(self.transition_down(in_im, filters))  # 0 16x16
-		pipe['down'].append(self.transition_down(pipe['down'][0], filters*2))  # 1 8x8
-		pipe['down'].append(self.transition_down(pipe['down'][1], filters*4))  # 2 4x4
+		# ================== Transition Down ============================ #
+		pipe.append(self.transition_down(in_im, filters))  # 0 16x16
+		pipe.append(self.transition_down(pipe[-1], filters*2))  # 1 8x8
+		pipe.append(self.transition_down(pipe[-1], filters*4))  # 2 4x4
+		pipe.append(self.transition_down(pipe[-1], filters*8))  # 2 4x4
+		pipe.append(self.transition_down(pipe[-1], filters*8))  # 2 4x4
+		c['down']=len(pipe)-1 # Last down-layer idx
+		
+		# =============== Dense block; no transition ================ #
+		#pipe.append(self.dense_block(pipe[-1], filters*16))  # 3 4x4
 
-		pipe['down'].append(self.dense_block(pipe['down'][2], filters*8))  # 3 4x4
-
-		pipe['up'].append(self.concatenate_transition_up(pipe['down'][3], pipe['down'][2], filters*4))  # 0 8x8
-		pipe['up'].append(self.concatenate_transition_up(pipe['up'][0], pipe['down'][1], filters*2))  # 1
-		pipe['up'].append(self.concatenate_transition_up(pipe['up'][1], pipe['down'][0], filters))  # 2
+		# =================== Transition Up ============================= #
+		c['up']=c['down'] # First up-layer idx 
+		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*8))  # 4 8x8
+		c['up']-=1
+		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*8))  # 4 8x8
+		c['up']-=1
+		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*4))  # 4 8x8
+		c['up']-=1
+		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*2))  # 5
+		c['up']-=1
+		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters))  # 6
 
 		out = Conv2D(self.class_n, (1, 1), activation='softmax',
-					 padding='same')(pipe['up'][-1])
+					 padding='same')(pipe[-1])
 
 		self.graph = Model(in_im, out)
 		print(self.graph.summary())
