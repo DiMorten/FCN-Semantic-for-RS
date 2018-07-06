@@ -241,11 +241,7 @@ class Dataset(NetObject):
 		w_block_len=int(self.image[subset]['label'].shape[1]/w_blocks)
 		
 		count=0
-		# if self.debug>=2:
-		# 	deb.prints(self.patches[subset]['prediction'][count].shape)
-		# 	deb.prints(self.patches[subset]['prediction'].shape)
-		# 	deb.prints(self.patches[subset]['label'].shape)
-			
+
 		for w_block in range(0,w_blocks):
 			for h_block in range(0,h_blocks):
 				y=int(h_block*h_block_len)
@@ -255,16 +251,13 @@ class Dataset(NetObject):
 				#deb.prints([y:y+self.patch_len])
 				self.im_reconstructed[y:y+self.patch_len,x:x+self.patch_len]=patches_block[h_block,w_block,:,:]
 				count+=1
-		deb.prints(count)
 
 		self.im_reconstructed_rgb=self.im_gray_idx_to_rgb(self.im_reconstructed)
-		if self.debug>=3: deb.prints(self.im_reconstructed_rgb.shape)
+		if self.debug>=3: 
+			deb.prints(count)
+			deb.prints(self.im_reconstructed_rgb.shape)
 
 		cv2.imwrite('../results/reconstructed/im_reconstructed_rgb_'+subset+'_'+mode+'.png',self.im_reconstructed_rgb.astype(np.uint8))
-
-		#print(h,w,h_blocks,w_blocks)
-		#for 
-
 
 	def im_gray_idx_to_rgb(self,im):
 		out=np.zeros((im.shape+(3,)))
@@ -274,14 +267,6 @@ class Dataset(NetObject):
 		deb.prints(out.shape)
 		out=cv2.cvtColor(out.astype(np.uint8),cv2.COLOR_RGB2BGR)
 		return out
-
-
-
-def one_hot_multilabel_check(data):
-	count_per_sample=np.count_nonzero(data,axis=1)
-	unique,count=np.unique(count_per_sample,return_counts=True)
-	print("unique,count",unique,count)
-
 
 
 class NetModel(NetObject):
@@ -317,8 +302,6 @@ class NetModel(NetObject):
 
 	def concatenate_transition_up(self, pipe1, pipe2, filters):
 		pipe = keras.layers.concatenate([pipe1, pipe2], axis=3)
-		
-		#pipe = merge([pipe1, pipe2], mode='concat', concat_axis=3)
 		pipe = self.transition_up(pipe, filters)
 		return pipe
 
