@@ -57,7 +57,7 @@ deb.prints(args.patch_step_test)
 
 class NetObject(object):
 
-	def __init__(self, patch_len=32, patch_step_train=32,patch_step_test=32, path="../data/", im_name_train="Image_Train.tif", im_name_test="Image_Test.tif", label_name_train="Reference_Train.tif", label_name_test="Reference_Test.tif", channel_n=3, debug=1, class_n=5):
+	def __init__(self, patch_len=32, patch_step_train=32,patch_step_test=32, path="../data/", im_name_train="Image_Train.tif", im_name_test="Image_Test.tif", label_name_train="Reference_Train.tif", label_name_test="Reference_Test.tif", channel_n=3, debug=1, class_n=5,exp_id="skip_connections"):
 		self.patch_len = patch_len
 		self.path = {"v": path, 'train': {}, 'test': {}}
 		self.image = {'train': {}, 'test': {}}
@@ -71,6 +71,15 @@ class NetObject(object):
 		self.channel_n = 3
 		self.debug = debug
 		self.class_n = 5
+		self.report={'best':{}}
+		self.report['exp_id']=exp_id
+		self.report['best']['text_name']='result_'+exp_id+'.txt'
+		self.report['best']['text_path']='../results/'+self.report['best']['text_name']
+		
+		#self.report['best']['im_reconstruct_predict_name']='im_reconstruct_predict_'+exp_id+'.png'
+
+
+
 
 
 
@@ -219,10 +228,15 @@ class Dataset(NetObject):
 		
 		metrics['average_acc'],metrics['per_class_acc']=self.average_acc(data['prediction_h'],data['label_h'])
 
+
 		if self.debug>=2: print(metrics['per_class_acc'])
 
 		return metrics
 
+	def metrics_write_to_txt(self,metrics):
+		with open(self.report['best']['text_path'], "w") as text_file:
+		    text_file.write("Overall_acc,average_acc,f1_score: %s,%s,%s" % metrics['overall_acc'],metrics['average_acc'],metrics['f1_score'])
+		
 
 	def probabilities_to_one_hot(self,vals):
 		out=np.zeros_like(vals)
@@ -263,7 +277,7 @@ class Dataset(NetObject):
 			deb.prints(count)
 			deb.prints(self.im_reconstructed_rgb.shape)
 
-		cv2.imwrite('../results/reconstructed/im_reconstructed_rgb_'+subset+'_'+mode+'.png',self.im_reconstructed_rgb.astype(np.uint8))
+		cv2.imwrite('../results/reconstructed/im_reconstructed_rgb_'+subset+'_'+mode+self.report['exp_id']+'.png',self.im_reconstructed_rgb.astype(np.uint8))
 
 	def im_gray_idx_to_rgb(self,im):
 		out=np.zeros((im.shape+(3,)))
@@ -286,6 +300,7 @@ class NetModel(NetObject):
 		self.batch['test']['size'] = batch_size_test
 		self.eval_mode = eval_mode
 		self.epochs = epochs
+		self.early_stop={'best':0,'count':0}
 
 	def transition_down(self, pipe, filters):
 		pipe = Conv2D(filters, (3, 3), strides=(2, 2), padding='same')(pipe)
@@ -374,6 +389,19 @@ class NetModel(NetObject):
 
 		self.train_loop(data)
 
+	def early_stop_check(self,metrics,most_important='average_acc'):
+
+		if metrics[most_important]>=self.early_stop['best']:
+			self.early_stop['best']=metrics[most_important]
+			self.early_stop['count']=0
+			data.metrics_write_to_txt(metrics)
+			data.im_reconstruct(subset='test',mode='prediction')
+		else:
+			self.early_stop['count']+=1
+			if self.early_stop["count"]>=self.early_stop["patience"]:
+				self.early_stop["signal"]=True
+			else:
+				self.early_stop["signal"]=False
 
 	def train_loop(self, data):
 		print('Start the training')
@@ -444,10 +472,11 @@ class NetModel(NetObject):
 			# Get test metrics
 			metrics=data.metrics_get(data.patches['test'])
 			
-			# Get, store test reconstructed image
-			data.im_reconstruct(subset='test',mode='prediction')
-			
-			
+			# Check early stop and store results if they are the best
+			self.early_stop_check(metrics)
+			if self.early_stop['signal']==True:
+				break
+
 			print('oa={}, aa={}, f1={}'.format(metrics['overall_acc'],metrics['average_acc'],metrics['f1_score']))
 		
 			# Average epoch loss
