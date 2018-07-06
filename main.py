@@ -349,7 +349,7 @@ class NetModel(NetObject):
 			2, 2), padding='same')(pipe)
 		pipe = keras.layers.BatchNormalization(axis=3)(pipe)
 		pipe = Activation('relu')(pipe)
-		#pipe = Dropout(0.2)(pipe)
+		pipe = Dropout(0.2)(pipe)
 		#pipe = Conv2D(filters, (1, 1), padding='same')(pipe)
 		#pipe = keras.layers.BatchNormalization(axis=3)(pipe)
 		#pipe = Activation('relu')(pipe)
@@ -475,6 +475,7 @@ class NetModel(NetObject):
 			# Average epoch loss
 			self.metrics['train']['loss'] /= self.batch['train']['n']
 
+			data.patches['test']['prediction']=np.zeros_like(data.patches['test']['label'])
 			self.batch_test_stats=True
 			for batch_id in range(0, self.batch['test']['n']):
 				idx0 = batch_id*self.batch['test']['size']
@@ -498,8 +499,8 @@ class NetModel(NetObject):
 				# 	#print(data.patches['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50.shape)
 				# 	cv2.imwrite("../results/pred"+str(batch_id)+".png",data.patches['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50)
 				# 	cv2.imwrite("../results/label"+str(batch_id)+".png",data.patches['test']['label'][idx0].argmax(axis=2).astype(np.uint8)*50)
-						
-			
+			deb.prints(data.patches['test']['label'].shape)		
+			deb.prints(idx1)
 			print("Epoch={}".format(epoch))	
 			
 			# Get test metrics
