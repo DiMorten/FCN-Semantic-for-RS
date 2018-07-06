@@ -71,6 +71,11 @@ class Dataset(NetObject):
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
+		self.im_gray_idx_to_rgb_table=[[0,[0,0,255],29],
+									[1,[0,255,0],150],
+									[2,[0,255,255],179],
+									[3,[255,255,0],226],
+									[4,[255,255,255],255]]
 		if self.debug >= 1:
 			print("Initializing Dataset instance")
 
@@ -250,21 +255,23 @@ class Dataset(NetObject):
 				count+=1
 		deb.prints(count)
 
-		#self.im_reconstructed_rgb=np.zeros((self.im_reconstructed.shape+(3,)))
-		
 
-		self.im_reconstructed_rgb=self.im_grayscale_idx_to_rgb(self.im_reconstructed)
+		self.im_reconstructed_rgb=self.im_gray_idx_to_rgb(self.im_reconstructed.shape)
 		deb.prints(self.im_reconstructed_rgb.shape)
+
+
 		cv2.imwrite('../results/reconstructed/im_reconstructed_'+subset+'_'+mode+'.png',self.im_reconstructed.astype(np.uint8)*40)
+		cv2.imwrite('../results/reconstructed/im_reconstructed_rgb_'+subset+'_'+mode+'.png',self.im_reconstructed_rgb.astype(np.uint8))
 
 		#print(h,w,h_blocks,w_blocks)
 		#for 
 
 
-	def im_grayscale_idx_to_rgb(self,im):
-		#deb.prints((im.shape+(3,)))
+	def im_gray_idx_to_rgb(self,im):
 		out=np.zeros((im.shape+(3,)))
-
+		for chan in range(0,3):
+			for clss in range(0,self.class_n):
+				out[:,:,chan][im==clss]=np.array(self.im_gray_idx_to_rgb_table[clss][1][chan])
 		return out
 
 
