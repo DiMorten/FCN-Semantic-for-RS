@@ -104,7 +104,6 @@ class Dataset(NetObject):
 		image['in'] = cv2.imread(path['in'], -1)
 		image['label'] = np.expand_dims(cv2.imread(path['label'], 0), axis=2)
 		image['label_rgb']=cv2.imread(path['label'], -1)
-		deb.prints(image['label_rgb'][0])
 		return image
 
 	def patches_extract(self, image, patch_step):
@@ -256,7 +255,7 @@ class Dataset(NetObject):
 		deb.prints(count)
 
 
-		self.im_reconstructed_rgb=self.im_gray_idx_to_rgb(self.im_reconstructed.shape)
+		self.im_reconstructed_rgb=self.im_gray_idx_to_rgb(self.im_reconstructed)
 		deb.prints(self.im_reconstructed_rgb.shape)
 
 
@@ -272,6 +271,8 @@ class Dataset(NetObject):
 		for chan in range(0,3):
 			for clss in range(0,self.class_n):
 				out[:,:,chan][im==clss]=np.array(self.im_gray_idx_to_rgb_table[clss][1][chan])
+		deb.prints(out.shape)
+		out=cv2.cvtColor(out.astype(np.uint8),cv2.COLOR_RGB2BGR)
 		return out
 
 
