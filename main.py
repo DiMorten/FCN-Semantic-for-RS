@@ -32,13 +32,15 @@ parser.add_argument('-pl', '--patch_len', dest='patch_len',
 parser.add_argument('-pstr', '--patch_step_train', dest='patch_step_train',
 					type=int, default=32, help='patch len')
 parser.add_argument('-psts', '--patch_step_test', dest='patch_step_test',
-					type=int, default=32, help='patch len')
+					type=int, default=None, help='patch len')
 
 parser.add_argument('-db', '--debug', dest='debug',
 					type=int, default=1, help='patch len')
 parser.add_argument('-ep', '--epochs', dest='epochs',
 					type=int, default=100, help='patch len')
 parser.add_argument('-bstr', '--batch_size_train', dest='batch_size_train',
+					type=int, default=32, help='patch len')
+parser.add_argument('-bstst', '--batch_size_test', dest='batch_size_test',
 					type=int, default=32, help='patch len')
 
 parser.add_argument('-em', '--eval_mode', dest='eval_mode',
@@ -48,6 +50,10 @@ parser.add_argument('-is', '--im_store', dest='im_store',
 
 args = parser.parse_args()
 
+if args.patch_step_test==None:
+	args.patch_step_test=args.patch_len
+
+deb.prints(args.patch_step_test)
 
 class NetObject(object):
 
@@ -285,6 +291,10 @@ class NetModel(NetObject):
 		pipe = Conv2D(filters, (3, 3), strides=(2, 2), padding='same')(pipe)
 		pipe = keras.layers.BatchNormalization(axis=3)(pipe)
 		pipe = Activation('relu')(pipe)
+		#pipe = Conv2D(filters, (1, 1), padding='same')(pipe)
+		#pipe = keras.layers.BatchNormalization(axis=3)(pipe)
+		#pipe = Activation('relu')(pipe)
+		
 		return pipe
 
 	def dense_block(self, pipe, filters):
@@ -298,6 +308,9 @@ class NetModel(NetObject):
 			2, 2), padding='same')(pipe)
 		pipe = keras.layers.BatchNormalization(axis=3)(pipe)
 		pipe = Activation('relu')(pipe)
+		#pipe = Conv2D(filters, (1, 1), padding='same')(pipe)
+		#pipe = keras.layers.BatchNormalization(axis=3)(pipe)
+		#pipe = Activation('relu')(pipe)
 		return pipe
 
 	def concatenate_transition_up(self, pipe1, pipe2, filters):
@@ -318,7 +331,6 @@ class NetModel(NetObject):
 		pipe.append(self.transition_down(pipe[-1], filters*2))  # 1 8x8
 		pipe.append(self.transition_down(pipe[-1], filters*4))  # 2 4x4
 		pipe.append(self.transition_down(pipe[-1], filters*8))  # 2 4x4
-		pipe.append(self.transition_down(pipe[-1], filters*8))  # 2 4x4
 		c['down']=len(pipe)-1 # Last down-layer idx
 		
 		# =============== Dense block; no transition ================ #
@@ -326,8 +338,6 @@ class NetModel(NetObject):
 
 		# =================== Transition Up ============================= #
 		c['up']=c['down'] # First up-layer idx 
-		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*8))  # 4 8x8
-		c['up']-=1
 		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*8))  # 4 8x8
 		c['up']-=1
 		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*4))  # 4 8x8
@@ -456,7 +466,7 @@ if __name__ == '__main__':
 
 	adam = Adam(lr=0.0001, beta_1=0.9)
 	model = NetModel(epochs=args.epochs, patch_len=args.patch_len,
-					 patch_step_train=args.patch_step_train, eval_mode=args.eval_mode,batch_size_train=args.batch_size_train)
+					 patch_step_train=args.patch_step_train, eval_mode=args.eval_mode,batch_size_train=args.batch_size_train,batch_size_test=args.batch_size_test)
 	model.build()
 	model.loss_weights=np.array([0.21159622, 0.13360889, 0.17312638, 0.29637921, 0.1852893])
 	model.compile(loss='binary_crossentropy',
