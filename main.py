@@ -249,8 +249,8 @@ class Dataset(NetObject):
 		
 		deb.prints(data_label_reconstructed.shape)
 		np.testing.assert_almost_equal(data['label'],data_label_reconstructed)
-		print("Is label reconstructed equal to original",np.equal(data['label'],data_label_reconstructed))
-		print("Is prediction reconstructed equal to original",np.equal(data['prediction'],data_prediction_reconstructed))
+		print("Is label reconstructed equal to original",np.array_equal(data['label'],data_label_reconstructed))
+		print("Is prediction reconstructed equal to original",np.array_equal(data['prediction'].argmax(axis=3),data_prediction_reconstructed.argmax(axis=3)))
 
 
 		
