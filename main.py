@@ -254,12 +254,9 @@ class Dataset(NetObject):
 				count+=1
 		deb.prints(count)
 
-
 		self.im_reconstructed_rgb=self.im_gray_idx_to_rgb(self.im_reconstructed)
-		deb.prints(self.im_reconstructed_rgb.shape)
+		if self.debug>=3: deb.prints(self.im_reconstructed_rgb.shape)
 
-
-		cv2.imwrite('../results/reconstructed/im_reconstructed_'+subset+'_'+mode+'.png',self.im_reconstructed.astype(np.uint8)*40)
 		cv2.imwrite('../results/reconstructed/im_reconstructed_rgb_'+subset+'_'+mode+'.png',self.im_reconstructed_rgb.astype(np.uint8))
 
 		#print(h,w,h_blocks,w_blocks)
@@ -297,17 +294,22 @@ class NetModel(NetObject):
 		self.epochs = epochs
 
 	def transition_down(self, pipe, filters):
-		pipe = Conv2D(filters, (3, 3), strides=(2, 2),
-					  activation='relu', padding='same')(pipe)
+		pipe = Conv2D(filters, (3, 3), strides=(2, 2), padding='same')(pipe)
+		pipe = keras.layers.BatchNormalization(axis=3)(pipe)
+		pipe = Activation('relu')(pipe)
 		return pipe
 
 	def dense_block(self, pipe, filters):
-		pipe = Conv2D(filters, (3, 3), activation='relu', padding='same')(pipe)
+		pipe = Conv2D(filters, (3, 3), padding='same')(pipe)
+		pipe = keras.layers.BatchNormalization(axis=3)(pipe)
+		pipe = Activation('relu')(pipe)
 		return pipe
 
 	def transition_up(self, pipe, filters):
 		pipe = Conv2DTranspose(filters, (3, 3), strides=(
-			2, 2), activation='relu', padding='same')(pipe)
+			2, 2), padding='same')(pipe)
+		pipe = keras.layers.BatchNormalization(axis=3)(pipe)
+		pipe = Activation('relu')(pipe)
 		return pipe
 
 	def concatenate_transition_up(self, pipe1, pipe2, filters):
