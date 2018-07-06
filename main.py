@@ -340,7 +340,7 @@ class NetModel(NetObject):
 			2, 2), padding='same')(pipe)
 		pipe = keras.layers.BatchNormalization(axis=3)(pipe)
 		pipe = Activation('relu')(pipe)
-		pipe = Dropout(0.5)(pipe)
+		pipe = Dropout(0.2)(pipe)
 		#pipe = Conv2D(filters, (1, 1), padding='same')(pipe)
 		#pipe = keras.layers.BatchNormalization(axis=3)(pipe)
 		#pipe = Activation('relu')(pipe)
