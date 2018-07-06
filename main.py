@@ -379,6 +379,7 @@ class NetModel(NetObject):
 		deb.prints(data.patches['test']['label'].shape)
 		deb.prints(self.batch['test']['n'])
 		
+		data.im_reconstruct(subset='test',mode='label')
 		#for epoch in [0,1]:
 		for epoch in range(self.epochs):
 
@@ -420,11 +421,11 @@ class NetModel(NetObject):
 				#batch['test']['prediction']=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 				data.patches['test']['prediction'][idx0:idx1]=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 
-				if (batch_id % 4 == 0) and (epoch % 3 == 0):
-					print("Saving image, batch id={}, epoch={}".format(batch_id,epoch))
-					#print(data.patches['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50.shape)
-					cv2.imwrite("../results/pred"+str(batch_id)+".png",data.patches['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50)
-					cv2.imwrite("../results/label"+str(batch_id)+".png",data.patches['test']['label'][idx0].argmax(axis=2).astype(np.uint8)*50)
+				# if (batch_id % 4 == 0) and (epoch % 3 == 0):
+				# 	print("Saving image, batch id={}, epoch={}".format(batch_id,epoch))
+				# 	#print(data.patches['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50.shape)
+				# 	cv2.imwrite("../results/pred"+str(batch_id)+".png",data.patches['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50)
+				# 	cv2.imwrite("../results/label"+str(batch_id)+".png",data.patches['test']['label'][idx0].argmax(axis=2).astype(np.uint8)*50)
 						
 			
 			print("Epoch={}".format(epoch))	
@@ -434,7 +435,7 @@ class NetModel(NetObject):
 			
 			# Get, store test reconstructed image
 			data.im_reconstruct(subset='test',mode='prediction')
-			data.im_reconstruct(subset='test',mode='label')
+			
 			
 			print('oa={}, aa={}, f1={}'.format(metrics['overall_acc'],metrics['average_acc'],metrics['f1_score']))
 		
