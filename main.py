@@ -37,7 +37,10 @@ parser.add_argument('-psts', '--patch_step_test', dest='patch_step_test',
 parser.add_argument('-db', '--debug', dest='debug',
 					type=int, default=1, help='patch len')
 parser.add_argument('-ep', '--epochs', dest='epochs',
-					type=int, default=100, help='patch len')
+					type=int, default=30, help='patch len')
+parser.add_argument('-pt', '--patience', dest='patience',
+					type=int, default=30, help='patience')
+
 parser.add_argument('-bstr', '--batch_size_train', dest='batch_size_train',
 					type=int, default=32, help='patch len')
 parser.add_argument('-bstst', '--batch_size_test', dest='batch_size_test',
@@ -47,6 +50,8 @@ parser.add_argument('-em', '--eval_mode', dest='eval_mode',
 					default='metrics', help='Test evaluate mode: metrics or predict')
 parser.add_argument('-is', '--im_store', dest='im_store',
 					default=True, help='Store sample test predicted images')
+parser.add_argument('-eid', '--exp_id', dest='exp_id',
+					default='default', help='Experiment id')
 
 args = parser.parse_args()
 
@@ -203,6 +208,15 @@ class Dataset(NetObject):
 		per_class_acc=np.divide(correct_per_class.astype('float32'),per_class_count.astype('float32'))
 		average_acc=np.average(per_class_acc)
 		return average_acc,per_class_acc
+	def flattened_to_im(self,data_h,im_shape):
+		out=np.reshape(data_h,im_shape)
+
+	def probabilities_to_one_hot(self,vals):
+		out=np.zeros_like(vals)
+		out[np.arange(len(vals)), vals.argmax(1)] = 1
+		return out
+
+
 	def metrics_get(self,data): #requires batch['prediction'],batch['label']
 		
 
@@ -228,20 +242,20 @@ class Dataset(NetObject):
 		
 		metrics['average_acc'],metrics['per_class_acc']=self.average_acc(data['prediction_h'],data['label_h'])
 
+		data_label_reconstructed=self.flattened_to_im(data['label_h'],data['label'].shape)
+		deb.prints(data_label_reconstructed.shape)
+		np.testing.assert_almost_equal(data['label'],data_label_reconstructed)
+		#np.assert_equal(data['label'],data_label_reconstructed)
 
 		if self.debug>=2: print(metrics['per_class_acc'])
 
 		return metrics
 
-	def metrics_write_to_txt(self,metrics):
+	def metrics_write_to_txt(self,metrics,epoch=0):
 		with open(self.report['best']['text_path'], "w") as text_file:
-		    text_file.write("Overall_acc,average_acc,f1_score: %s,%s,%s" % metrics['overall_acc'],metrics['average_acc'],metrics['f1_score'])
+		    text_file.write("Overall_acc,average_acc,f1_score: {0},{1},{2},{3}".format(str(metrics['overall_acc']),str(metrics['average_acc']),str(metrics['f1_score']),str(epoch)))
 		
 
-	def probabilities_to_one_hot(self,vals):
-		out=np.zeros_like(vals)
-		out[np.arange(len(vals)), vals.argmax(1)] = 1
-		return out
 
 # =================== Image reconstruct =======================#
 
@@ -290,7 +304,7 @@ class Dataset(NetObject):
 
 
 class NetModel(NetObject):
-	def __init__(self, batch_size_train=32, batch_size_test=200, epochs=2, eval_mode='metrics', *args, **kwargs):
+	def __init__(self, batch_size_train=32, batch_size_test=200, epochs=30, patience=30, eval_mode='metrics', *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		if self.debug >= 1:
 			print("Initializing Model instance")
@@ -300,7 +314,10 @@ class NetModel(NetObject):
 		self.batch['test']['size'] = batch_size_test
 		self.eval_mode = eval_mode
 		self.epochs = epochs
-		self.early_stop={'best':0,'count':0}
+		self.early_stop={'best':0,
+					'count':0,
+					'signal':False,
+					'patience':patience}
 
 	def transition_down(self, pipe, filters):
 		pipe = Conv2D(filters, (3, 3), strides=(2, 2), padding='same')(pipe)
@@ -323,6 +340,7 @@ class NetModel(NetObject):
 			2, 2), padding='same')(pipe)
 		pipe = keras.layers.BatchNormalization(axis=3)(pipe)
 		pipe = Activation('relu')(pipe)
+		pipe = Dropout(0.5)(pipe)
 		#pipe = Conv2D(filters, (1, 1), padding='same')(pipe)
 		#pipe = keras.layers.BatchNormalization(axis=3)(pipe)
 		#pipe = Activation('relu')(pipe)
@@ -389,12 +407,13 @@ class NetModel(NetObject):
 
 		self.train_loop(data)
 
-	def early_stop_check(self,metrics,most_important='average_acc'):
+	def early_stop_check(self,metrics,epoch,most_important='average_acc'):
 
 		if metrics[most_important]>=self.early_stop['best']:
 			self.early_stop['best']=metrics[most_important]
 			self.early_stop['count']=0
-			data.metrics_write_to_txt(metrics)
+			print("Best metric updated")
+			data.metrics_write_to_txt(metrics,epoch)
 			data.im_reconstruct(subset='test',mode='prediction')
 		else:
 			self.early_stop['count']+=1
@@ -402,7 +421,9 @@ class NetModel(NetObject):
 				self.early_stop["signal"]=True
 			else:
 				self.early_stop["signal"]=False
-
+	# test_metrics_evaluate(self,data,metrics,epoch):
+			
+			
 	def train_loop(self, data):
 		print('Start the training')
 		cback_tboard = keras.callbacks.TensorBoard(
@@ -422,8 +443,8 @@ class NetModel(NetObject):
 		#for epoch in [0,1]:
 		for epoch in range(self.epochs):
 
-			self.metrics['train']['loss'] = np.zeros((1, 4))
-			self.metrics['test']['loss'] = np.zeros((1, 4))
+			self.metrics['train']['loss'] = np.zeros((1, 2))
+			self.metrics['test']['loss'] = np.zeros((1, 2))
 
 			# Random shuffle the data
 			data.patches['train']['in'], data.patches['train']['label'] = shuffle(data.patches['train']['in'], data.patches['train']['label'])
@@ -440,10 +461,12 @@ class NetModel(NetObject):
 				self.metrics['train']['loss'] += self.graph.train_on_batch(
 					batch['train']['in'], batch['train']['label'])		# Accumulated epoch
 
+				#if batch_id % 50 == 0:
+				#	self.test_metrics_evaluate(data,metrics,epoch)
 			# Average epoch loss
 			self.metrics['train']['loss'] /= self.batch['train']['n']
 
-
+			self.batch_test_stats=True
 			for batch_id in range(0, self.batch['test']['n']):
 				idx0 = batch_id*self.batch['test']['size']
 				idx1 = (batch_id+1)*self.batch['test']['size']
@@ -454,8 +477,9 @@ class NetModel(NetObject):
 				batch['test']['label'] = data.patches['test']['label'][idx0:idx1]
 
 				#deb.prints(batch['test']['label'].shape)
-				self.metrics['test']['loss'] += self.graph.test_on_batch(
-					batch['test']['in'], batch['test']['label'])		# Accumulated epoch
+				if self.batch_test_stats:
+					self.metrics['test']['loss'] += self.graph.test_on_batch(
+						batch['test']['in'], batch['test']['label'])		# Accumulated epoch
 
 				#batch['test']['prediction']=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 				data.patches['test']['prediction'][idx0:idx1]=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
@@ -473,10 +497,11 @@ class NetModel(NetObject):
 			metrics=data.metrics_get(data.patches['test'])
 			
 			# Check early stop and store results if they are the best
-			self.early_stop_check(metrics)
+			self.early_stop_check(metrics,epoch)
+
+			#self.test_metrics_evaluate(data.patches['test'],metrics,epoch)
 			if self.early_stop['signal']==True:
 				break
-
 			print('oa={}, aa={}, f1={}'.format(metrics['overall_acc'],metrics['average_acc'],metrics['f1_score']))
 		
 			# Average epoch loss
@@ -489,17 +514,21 @@ class NetModel(NetObject):
 flag = {"data_create": True, "label_one_hot": True}
 if __name__ == '__main__':
 	#
-	data = Dataset(patch_len=args.patch_len, patch_step_train=args.patch_step_train)
+	data = Dataset(patch_len=args.patch_len, patch_step_train=args.patch_step_train,exp_id=args.exp_id)
 	if flag['data_create']:
 		data.create()
 
 	adam = Adam(lr=0.0001, beta_1=0.9)
 	model = NetModel(epochs=args.epochs, patch_len=args.patch_len,
-					 patch_step_train=args.patch_step_train, eval_mode=args.eval_mode,batch_size_train=args.batch_size_train,batch_size_test=args.batch_size_test)
+					 patch_step_train=args.patch_step_train, eval_mode=args.eval_mode,
+					 batch_size_train=args.batch_size_train,batch_size_test=args.batch_size_test,
+					 patience=args.patience)
 	model.build()
 	model.loss_weights=np.array([0.21159622, 0.13360889, 0.17312638, 0.29637921, 0.1852893])
+	metrics=['accuracy']
+	#metrics=['accuracy',fmeasure,categorical_accuracy]
 	model.compile(loss='binary_crossentropy',
-				  optimizer=adam, metrics=['accuracy',fmeasure,categorical_accuracy],loss_weights=model.loss_weights)
+				  optimizer=adam, metrics=metrics,loss_weights=model.loss_weights)
 	if args.debug:
 		deb.prints(np.unique(data.patches['train']['label']))
 		deb.prints(data.patches['train']['label'].shape)
