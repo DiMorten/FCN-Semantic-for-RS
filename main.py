@@ -43,7 +43,7 @@ parser.add_argument('-pt', '--patience', dest='patience',
 
 parser.add_argument('-bstr', '--batch_size_train', dest='batch_size_train',
 					type=int, default=32, help='patch len')
-parser.add_argument('-bstst', '--batch_size_test', dest='batch_size_test',
+parser.add_argument('-bsts', '--batch_size_test', dest='batch_size_test',
 					type=int, default=32, help='patch len')
 
 parser.add_argument('-em', '--eval_mode', dest='eval_mode',
@@ -68,7 +68,7 @@ class NetObject(object):
 		self.image = {'train': {}, 'test': {}}
 		self.patches = {'train': {}, 'test': {}}
 		self.patches['train']['step']=patch_step_train
-		self.patches['test']['step']=patch_len        
+		self.patches['test']['step']=patch_step_test        
 		self.path['train']['in'] = path + im_name_train
 		self.path['test']['in'] = path + im_name_test
 		self.path['train']['label'] = path + label_name_train
@@ -209,12 +209,14 @@ class Dataset(NetObject):
 		average_acc=np.average(per_class_acc)
 		return average_acc,per_class_acc
 	def flattened_to_im(self,data_h,im_shape):
-		out=np.reshape(data_h,im_shape)
+		return np.reshape(data_h,im_shape)
 
 	def probabilities_to_one_hot(self,vals):
 		out=np.zeros_like(vals)
 		out[np.arange(len(vals)), vals.argmax(1)] = 1
 		return out
+	def assert_equal(self,val1,val2):
+		return np.equal(val1,val2)
 
 
 	def metrics_get(self,data): #requires batch['prediction'],batch['label']
@@ -243,8 +245,15 @@ class Dataset(NetObject):
 		metrics['average_acc'],metrics['per_class_acc']=self.average_acc(data['prediction_h'],data['label_h'])
 
 		data_label_reconstructed=self.flattened_to_im(data['label_h'],data['label'].shape)
+		data_prediction_reconstructed=self.flattened_to_im(data['prediction_h'],data['label'].shape)
+		
 		deb.prints(data_label_reconstructed.shape)
 		np.testing.assert_almost_equal(data['label'],data_label_reconstructed)
+		print("Is label reconstructed equal to original",np.equal(data['label'],data_label_reconstructed))
+		print("Is prediction reconstructed equal to original",np.equal(data['prediction'],data_prediction_reconstructed))
+
+
+		
 		#np.assert_equal(data['label'],data_label_reconstructed)
 
 		if self.debug>=2: print(metrics['per_class_acc'])
@@ -514,7 +523,8 @@ class NetModel(NetObject):
 flag = {"data_create": True, "label_one_hot": True}
 if __name__ == '__main__':
 	#
-	data = Dataset(patch_len=args.patch_len, patch_step_train=args.patch_step_train,exp_id=args.exp_id)
+	data = Dataset(patch_len=args.patch_len, patch_step_train=args.patch_step_train,
+		patch_step_test=args.patch_step_test,exp_id=args.exp_id)
 	if flag['data_create']:
 		data.create()
 
