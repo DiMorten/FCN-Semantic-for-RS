@@ -24,6 +24,7 @@ from sklearn.metrics import confusion_matrix,f1_score,accuracy_score,classificat
 
 from metrics import fmeasure,categorical_accuracy
 import deb
+from keras_weighted_categorical_crossentropy import weighted_categorical_crossentropy
 
 parser = argparse.ArgumentParser(description='')
 parser.add_argument('-pl', '--patch_len', dest='patch_len',
@@ -103,6 +104,8 @@ class Dataset(NetObject):
 		image = {}
 		image['in'] = cv2.imread(path['in'], -1)
 		image['label'] = np.expand_dims(cv2.imread(path['label'], 0), axis=2)
+		count,unique=np.unique(image['label'],return_counts=True)
+		print("label count,unique",count,unique)
 		image['label_rgb']=cv2.imread(path['label'], -1)
 		return image
 
@@ -342,8 +345,9 @@ class NetModel(NetObject):
 		self.graph = Model(in_im, out)
 		print(self.graph.summary())
 
-	def compile(self, optimizer, loss='binary_crossentropy', metrics=['accuracy',metrics.categorical_accuracy]):
-		self.graph.compile(loss=loss, optimizer=optimizer, metrics=metrics)
+	def compile(self, optimizer, loss='binary_crossentropy', metrics=['accuracy',metrics.categorical_accuracy],loss_weights=None):
+		loss_weighted=weighted_categorical_crossentropy(loss_weights)
+		self.graph.compile(loss=loss_weighted, optimizer=optimizer, metrics=metrics)
 
 	def train(self, data):
 
@@ -457,8 +461,9 @@ if __name__ == '__main__':
 	model = NetModel(epochs=args.epochs, patch_len=args.patch_len,
 					 patch_step_train=args.patch_step_train, eval_mode=args.eval_mode,batch_size_train=args.batch_size_train)
 	model.build()
+	model.loss_weights=np.array([0.21159622, 0.13360889, 0.17312638, 0.29637921, 0.1852893])
 	model.compile(loss='binary_crossentropy',
-				  optimizer=adam, metrics=['accuracy',fmeasure,categorical_accuracy])
+				  optimizer=adam, metrics=['accuracy',fmeasure,categorical_accuracy],loss_weights=model.loss_weights)
 	if args.debug:
 		deb.prints(np.unique(data.patches['train']['label']))
 		deb.prints(data.patches['train']['label'].shape)
