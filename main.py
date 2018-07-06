@@ -247,13 +247,21 @@ class Dataset(NetObject):
 				self.im_reconstructed[y:y+self.patch_len,x:x+self.patch_len]=patches_block[h_block,w_block,:,:]
 				count+=1
 		deb.prints(count)
+
+		self.im_reconstructed_rgb=np.zeros((self.im_reconstructed.shape+(3,)))
+		deb.prints(self.im_reconstructed_rgb.shape)
+
+		self.im_reconstructed_rgb=self.im_grayscale_idx_to_rgb(self.im_reconstructed.shape)
 		cv2.imwrite('../results/reconstructed/im_reconstructed_'+subset+'_'+mode+'.png',self.im_reconstructed.astype(np.uint8)*40)
 
 		#print(h,w,h_blocks,w_blocks)
 		#for 
 
 
-#	def im_grayscale_idx_to_color(self,im):
+	def im_grayscale_idx_to_rgb(self,im):
+		out=np.zeros((im.shape+(3,)))
+		return out
+
 
 
 def one_hot_multilabel_check(data):
