@@ -375,6 +375,9 @@ class NetModel(NetObject):
 		pipe.append(self.transition_down(pipe[-1], filters*2))  # 1 8x8
 		pipe.append(self.transition_down(pipe[-1], filters*4))  # 2 4x4
 		pipe.append(self.transition_down(pipe[-1], filters*8))  # 2 4x4
+		
+		pipe.append(self.transition_down(pipe[-1], filters*8))  # 2 4x4
+		
 		c['down']=len(pipe)-1 # Last down-layer idx
 		
 		# =============== Dense block; no transition ================ #
@@ -382,6 +385,9 @@ class NetModel(NetObject):
 
 		# =================== Transition Up ============================= #
 		c['up']=c['down'] # First up-layer idx 
+		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*8))  # 4 8x8
+		c['up']-=1
+		
 		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*8))  # 4 8x8
 		c['up']-=1
 		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*4))  # 4 8x8
