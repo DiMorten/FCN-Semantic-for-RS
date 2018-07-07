@@ -365,6 +365,7 @@ class NetModel(NetObject):
 	def build(self):
 		in_im = Input(shape=(self.patch_len, self.patch_len, self.channel_n))
 		filters = 64
+#		filters = 32
 
 		#pipe = {'fwd': [], 'bckwd': []}
 		c = {'init_up': 0, 'up': 0}
@@ -376,7 +377,6 @@ class NetModel(NetObject):
 		pipe.append(self.transition_down(pipe[-1], filters*4))  # 2 4x4
 		pipe.append(self.transition_down(pipe[-1], filters*8))  # 2 4x4
 		
-		pipe.append(self.transition_down(pipe[-1], filters*8))  # 2 4x4
 		
 		c['down']=len(pipe)-1 # Last down-layer idx
 		
@@ -385,8 +385,6 @@ class NetModel(NetObject):
 
 		# =================== Transition Up ============================= #
 		c['up']=c['down'] # First up-layer idx 
-		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*8))  # 4 8x8
-		c['up']-=1
 		
 		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*8))  # 4 8x8
 		c['up']-=1
