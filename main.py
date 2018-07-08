@@ -140,8 +140,11 @@ class Dataset(NetObject):
 
 		# ===================== Switch labels to one-hot ===============#
 		##patches['label'] = np.reshape(patches['label'].shape[0],patches['label'].shape[1::])
-		if self.debug >= 2:
+		if self.debug >= 0:
 			deb.prints(patches['label'].shape)
+			cv2.imwrite('../results/label_patch_sample0.png',patches['label'][0].astype(np.uint8)*100)
+			cv2.imwrite('../results/label_patch_sample19.png',patches['label'][19].astype(np.uint8)*100)
+
 
 		if flag['label_one_hot']:
 
@@ -272,7 +275,7 @@ class Dataset(NetObject):
 		h,w,_=self.image[subset]['label'].shape
 		print(self.patches[subset]['label_partitioned_shape'])
 
-		h=h-30 # Last 30 vertical pixels were not taken into account
+		#h=h-30 # Last 30 vertical pixels were not taken into account
 		deb.prints(self.patches[subset][mode].shape)
 		
 		h_blocks,w_blocks,patch_len,_=self.patches[subset]['label_partitioned_shape']
@@ -282,8 +285,13 @@ class Dataset(NetObject):
 
 		self.im_reconstructed=np.squeeze(np.zeros_like(self.image[subset]['label']))
 
-		h_block_len=int(self.image[subset]['label'].shape[0]/h_blocks)
-		w_block_len=int(self.image[subset]['label'].shape[1]/w_blocks)
+		#h_block_len=int(self.image[subset]['label'].shape[0]/h_blocks)
+		#w_block_len=int(self.image[subset]['label'].shape[1]/w_blocks)
+		w_block_len=self.patch_len
+		h_block_len=self.patch_len
+		
+		deb.prints(h_block_len)
+		deb.prints(w_block_len)
 		
 		count=0
 
@@ -491,14 +499,15 @@ class NetModel(NetObject):
 
 			data.patches['test']['prediction']=np.zeros_like(data.patches['test']['label'])
 			self.batch_test_stats=True
+
 			for batch_id in range(0, self.batch['test']['n']+1):
 				idx0 = batch_id*self.batch['test']['size']
 				idx1 = (batch_id+1)*self.batch['test']['size']
 
 
 				# This is for last batch
-				if idx0>=data.patches['test']['n']:
-					break
+				#if idx0>=data.patches['test']['n']:
+				#	break
 				if idx1>data.patches['test']['n']:
 					idx1=data.patches['test']['n']
 					
@@ -512,18 +521,24 @@ class NetModel(NetObject):
 					self.metrics['test']['loss'] += self.graph.test_on_batch(
 						batch['test']['in'], batch['test']['label'])		# Accumulated epoch
 
+
+
+
 				#batch['test']['prediction']=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 				data.patches['test']['prediction'][idx0:idx1]=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 
+				
 				# if (batch_id % 4 == 0) and (epoch % 3 == 0):
 				# 	print("Saving image, batch id={}, epoch={}".format(batch_id,epoch))
 				# 	#print(data.patches['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50.shape)
 				# 	cv2.imwrite("../results/pred"+str(batch_id)+".png",data.patches['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50)
 				# 	cv2.imwrite("../results/label"+str(batch_id)+".png",data.patches['test']['label'][idx0].argmax(axis=2).astype(np.uint8)*50)
+			
 			deb.prints(data.patches['test']['label'].shape)		
 			deb.prints(idx1)
 			print("Epoch={}".format(epoch))	
 			
+		
 			# Get test metrics
 			metrics=data.metrics_get(data.patches['test'])
 			
