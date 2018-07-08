@@ -140,11 +140,8 @@ class Dataset(NetObject):
 
 		# ===================== Switch labels to one-hot ===============#
 		##patches['label'] = np.reshape(patches['label'].shape[0],patches['label'].shape[1::])
-		if self.debug >= 0:
+		if self.debug >= 2:
 			deb.prints(patches['label'].shape)
-			cv2.imwrite('../results/label_patch_sample0.png',patches['label'][0].astype(np.uint8)*100)
-			cv2.imwrite('../results/label_patch_sample19.png',patches['label'][19].astype(np.uint8)*100)
-
 
 		if flag['label_one_hot']:
 
@@ -274,8 +271,6 @@ class Dataset(NetObject):
 	def im_reconstruct(self,subset='test',mode='prediction'):
 		h,w,_=self.image[subset]['label'].shape
 		print(self.patches[subset]['label_partitioned_shape'])
-
-		#h=h-30 # Last 30 vertical pixels were not taken into account
 		deb.prints(self.patches[subset][mode].shape)
 		
 		h_blocks,w_blocks,patch_len,_=self.patches[subset]['label_partitioned_shape']
@@ -285,13 +280,8 @@ class Dataset(NetObject):
 
 		self.im_reconstructed=np.squeeze(np.zeros_like(self.image[subset]['label']))
 
-		#h_block_len=int(self.image[subset]['label'].shape[0]/h_blocks)
-		#w_block_len=int(self.image[subset]['label'].shape[1]/w_blocks)
-		w_block_len=self.patch_len
-		h_block_len=self.patch_len
-		
-		deb.prints(h_block_len)
-		deb.prints(w_block_len)
+		h_block_len=int(self.image[subset]['label'].shape[0]/h_blocks)
+		w_block_len=int(self.image[subset]['label'].shape[1]/w_blocks)
 		
 		count=0
 
@@ -373,7 +363,6 @@ class NetModel(NetObject):
 	def build(self):
 		in_im = Input(shape=(self.patch_len, self.patch_len, self.channel_n))
 		filters = 64
-#		filters = 32
 
 		#pipe = {'fwd': [], 'bckwd': []}
 		c = {'init_up': 0, 'up': 0}
@@ -384,8 +373,6 @@ class NetModel(NetObject):
 		pipe.append(self.transition_down(pipe[-1], filters*2))  # 1 8x8
 		pipe.append(self.transition_down(pipe[-1], filters*4))  # 2 4x4
 		pipe.append(self.transition_down(pipe[-1], filters*8))  # 2 4x4
-		
-		
 		c['down']=len(pipe)-1 # Last down-layer idx
 		
 		# =============== Dense block; no transition ================ #
@@ -393,7 +380,6 @@ class NetModel(NetObject):
 
 		# =================== Transition Up ============================= #
 		c['up']=c['down'] # First up-layer idx 
-		
 		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*8))  # 4 8x8
 		c['up']-=1
 		pipe.append(self.concatenate_transition_up(pipe[-1], pipe[c['up']], filters*4))  # 4 8x8
@@ -434,10 +420,6 @@ class NetModel(NetObject):
 
 		if metrics[most_important]>=self.early_stop['best']:
 			self.early_stop['best']=metrics[most_important]
-			self.early_stop['overall_acc']=metrics['overall_acc']
-			self.early_stop['f1_score']=metrics['f1_score']
-			self.early_stop['average_acc']=metrics['average_acc']
-			
 			self.early_stop['count']=0
 			print("Best metric updated")
 			data.metrics_write_to_txt(metrics,epoch)
@@ -459,10 +441,6 @@ class NetModel(NetObject):
 		batch = {'train': {}, 'test': {}}
 		self.batch['train']['n'] = data.patches['train']['in'].shape[0] // self.batch['train']['size']
 		self.batch['test']['n'] = data.patches['test']['in'].shape[0] // self.batch['test']['size']
-
-		data.patches['test']['n']=data.patches['test']['label'].shape[0]
-		data.patches['train']['n']=data.patches['train']['label'].shape[0]
-
 
 		data.patches['test']['prediction']=np.zeros_like(data.patches['test']['label'])
 		count,unique=np.unique(data.patches['test']['label'].argmax(axis=3),return_counts=True)
@@ -499,18 +477,10 @@ class NetModel(NetObject):
 
 			data.patches['test']['prediction']=np.zeros_like(data.patches['test']['label'])
 			self.batch_test_stats=True
-
-			for batch_id in range(0, self.batch['test']['n']+1):
+			for batch_id in range(0, self.batch['test']['n']):
 				idx0 = batch_id*self.batch['test']['size']
 				idx1 = (batch_id+1)*self.batch['test']['size']
 
-
-				# This is for last batch
-				#if idx0>=data.patches['test']['n']:
-				#	break
-				if idx1>data.patches['test']['n']:
-					idx1=data.patches['test']['n']
-					
 				#deb.prints(data.patches['test']['label'].shape)
 				#print(idx0,idx1)
 				batch['test']['in'] = data.patches['test']['in'][idx0:idx1]
@@ -521,24 +491,18 @@ class NetModel(NetObject):
 					self.metrics['test']['loss'] += self.graph.test_on_batch(
 						batch['test']['in'], batch['test']['label'])		# Accumulated epoch
 
-
-
-
 				#batch['test']['prediction']=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 				data.patches['test']['prediction'][idx0:idx1]=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 
-				
 				# if (batch_id % 4 == 0) and (epoch % 3 == 0):
 				# 	print("Saving image, batch id={}, epoch={}".format(batch_id,epoch))
 				# 	#print(data.patches['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50.shape)
 				# 	cv2.imwrite("../results/pred"+str(batch_id)+".png",data.patches['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50)
 				# 	cv2.imwrite("../results/label"+str(batch_id)+".png",data.patches['test']['label'][idx0].argmax(axis=2).astype(np.uint8)*50)
-			
 			deb.prints(data.patches['test']['label'].shape)		
 			deb.prints(idx1)
 			print("Epoch={}".format(epoch))	
 			
-		
 			# Get test metrics
 			metrics=data.metrics_get(data.patches['test'])
 			
@@ -547,9 +511,6 @@ class NetModel(NetObject):
 
 			#self.test_metrics_evaluate(data.patches['test'],metrics,epoch)
 			if self.early_stop['signal']==True:
-				deb.prints(self.early_stop['overall_acc'])
-				deb.prints(self.early_stop['average_acc'])
-				deb.prints(self.early_stop['f1_score'])
 				break
 			print('oa={}, aa={}, f1={}'.format(metrics['overall_acc'],metrics['average_acc'],metrics['f1_score']))
 		
