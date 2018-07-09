@@ -264,6 +264,18 @@ class Dataset(NetObject):
 		with open(self.report['best']['text_path'], "w") as text_file:
 		    text_file.write("Overall_acc,average_acc,f1_score: {0},{1},{2},{3}".format(str(metrics['overall_acc']),str(metrics['average_acc']),str(metrics['f1_score']),str(epoch)))
 		
+	def metrics_per_class_from_im_get(self,name='im_reconstructed_rgb_test_predictionplen64_3.png',folder='../results/reconstructed/',average=None):
+		data={}
+		metrics={}
+		deb.prints(folder+name)
+		data['prediction']=cv2.imread(folder+name,0)[0:-30,0:-2]
+		data['label']=cv2.imread(folder+'im_reconstructed_rgb_test_labelplen64_3.png',0)[0:-30,0:-2]
+
+		data['prediction']=np.reshape(data['prediction'],-1)
+		data['label']=np.reshape(data['label'],-1)
+		
+		metrics['f1_score_per_class']=f1_score(data['prediction'],data['label'],average=average)
+		print(metrics)
 
 
 # =================== Image reconstruct =======================#
