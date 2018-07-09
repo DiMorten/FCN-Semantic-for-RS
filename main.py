@@ -60,6 +60,7 @@ if args.patch_step_test==None:
 
 deb.prints(args.patch_step_test)
 
+# ================= Generic class for init values =============================================== #
 class NetObject(object):
 
 	def __init__(self, patch_len=32, patch_step_train=32,patch_step_test=32, path="../data/", im_name_train="Image_Train.tif", im_name_test="Image_Test.tif", label_name_train="Reference_Train.tif", label_name_test="Reference_Test.tif", channel_n=3, debug=1, class_n=5,exp_id="skip_connections"):
@@ -80,14 +81,8 @@ class NetObject(object):
 		self.report['exp_id']=exp_id
 		self.report['best']['text_name']='result_'+exp_id+'.txt'
 		self.report['best']['text_path']='../results/'+self.report['best']['text_name']
-		
-		#self.report['best']['im_reconstruct_predict_name']='im_reconstruct_predict_'+exp_id+'.png'
 
-
-
-
-
-
+# ================= Dataset class implements data loading, patch extraction, metric calculation and image reconstruction =======#
 class Dataset(NetObject):
 
 	def __init__(self, *args, **kwargs):
@@ -136,10 +131,9 @@ class Dataset(NetObject):
 			image['in'], (self.patch_len, self.patch_len, self.channel_n), step=patch_step)
 		patches['label'],patches['label_partitioned_shape'] = self.view_as_windows_multichannel(
 			image['label'], (self.patch_len, self.patch_len, 1), step=patch_step)
-		#patches['label'] = np.expand_dims(patches['label'],axis=3)
 
 		# ===================== Switch labels to one-hot ===============#
-		##patches['label'] = np.reshape(patches['label'].shape[0],patches['label'].shape[1::])
+
 		if self.debug >= 2:
 			deb.prints(patches['label'].shape)
 
@@ -159,9 +153,6 @@ class Dataset(NetObject):
 				for loc_idx in range(0, patches['label_h'].shape[1]):
 					patches['label_h2'][sample_idx, loc_idx,
 										patches['label_h'][sample_idx][loc_idx]] = 1
-
-				# deb.prints(np.squeeze(patches['label_h'][sample_idx].shape))
-#				patches['label_h2'][sample_idx,:,np.squeeze(patches['label_h'][sample_idx])]=1
 
 			# Get the image one-hot labels
 			patches['label'] = np.reshape(patches['label_h2'], (patches['label_h2'].shape[0],
@@ -252,10 +243,6 @@ class Dataset(NetObject):
 		print("Is label reconstructed equal to original",np.array_equal(data['label'],data_label_reconstructed))
 		print("Is prediction reconstructed equal to original",np.array_equal(data['prediction'].argmax(axis=3),data_prediction_reconstructed.argmax(axis=3)))
 
-
-		
-		#np.assert_equal(data['label'],data_label_reconstructed)
-
 		if self.debug>=2: print(metrics['per_class_acc'])
 
 		return metrics
@@ -323,6 +310,7 @@ class Dataset(NetObject):
 		out=cv2.cvtColor(out.astype(np.uint8),cv2.COLOR_RGB2BGR)
 		return out
 
+# ========== NetModel object implements model graph definition, train/testing, early stopping ================ #
 
 class NetModel(NetObject):
 	def __init__(self, batch_size_train=32, batch_size_test=200, epochs=30, patience=30, eval_mode='metrics', *args, **kwargs):
@@ -414,7 +402,6 @@ class NetModel(NetObject):
 
 		# Random shuffle
 		data.patches['train']['in'], data.patches['train']['label'] = shuffle(data.patches['train']['in'], data.patches['train']['label'], random_state=0)
-		#data.patches['test']['in'], data.patches['test']['label'] = shuffle(data.patches['test']['in'], data.patches['test']['label'], random_state=0)
 
 		# Normalize
 		data.patches['train']['in'] = normalize(data.patches['train']['in'].astype('float32'))
@@ -442,7 +429,6 @@ class NetModel(NetObject):
 				self.early_stop["signal"]=True
 			else:
 				self.early_stop["signal"]=False
-	# test_metrics_evaluate(self,data,metrics,epoch):
 			
 			
 	def train_loop(self, data):
@@ -471,7 +457,6 @@ class NetModel(NetObject):
 			data.patches['train']['in'], data.patches['train']['label'] = shuffle(data.patches['train']['in'], data.patches['train']['label'])
 
 			for batch_id in range(0, self.batch['train']['n']):
-			#for batch_id in range(0, 2):
 				
 				idx0 = batch_id*self.batch['train']['size']
 				idx1 = (batch_id+1)*self.batch['train']['size']
@@ -482,8 +467,6 @@ class NetModel(NetObject):
 				self.metrics['train']['loss'] += self.graph.train_on_batch(
 					batch['train']['in'], batch['train']['label'])		# Accumulated epoch
 
-				#if batch_id % 50 == 0:
-				#	self.test_metrics_evaluate(data,metrics,epoch)
 			# Average epoch loss
 			self.metrics['train']['loss'] /= self.batch['train']['n']
 
@@ -493,24 +476,15 @@ class NetModel(NetObject):
 				idx0 = batch_id*self.batch['test']['size']
 				idx1 = (batch_id+1)*self.batch['test']['size']
 
-				#deb.prints(data.patches['test']['label'].shape)
-				#print(idx0,idx1)
 				batch['test']['in'] = data.patches['test']['in'][idx0:idx1]
 				batch['test']['label'] = data.patches['test']['label'][idx0:idx1]
 
-				#deb.prints(batch['test']['label'].shape)
 				if self.batch_test_stats:
 					self.metrics['test']['loss'] += self.graph.test_on_batch(
 						batch['test']['in'], batch['test']['label'])		# Accumulated epoch
 
-				#batch['test']['prediction']=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 				data.patches['test']['prediction'][idx0:idx1]=self.graph.predict(batch['test']['in'],batch_size=self.batch['test']['size'])
 
-				# if (batch_id % 4 == 0) and (epoch % 3 == 0):
-				# 	print("Saving image, batch id={}, epoch={}".format(batch_id,epoch))
-				# 	#print(data.patches['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50.shape)
-				# 	cv2.imwrite("../results/pred"+str(batch_id)+".png",data.patches['test']['prediction'][idx0].argmax(axis=2).astype(np.uint8)*50)
-				# 	cv2.imwrite("../results/label"+str(batch_id)+".png",data.patches['test']['label'][idx0].argmax(axis=2).astype(np.uint8)*50)
 			deb.prints(data.patches['test']['label'].shape)		
 			deb.prints(idx1)
 			print("Epoch={}".format(epoch))	
